@@ -1,0 +1,3 @@
+[submodule "extern/RaZ"]
+	path = extern/RaZ
+	url = https://github.com/Razakhel/RaZ

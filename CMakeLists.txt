@@ -431,6 +431,82 @@ file(
     ${ATMOS_SRC}
 )
 
+#####################
+# Atmos - RaZ usage #
+#####################
+
+# Finding RaZ
+option(ATMOS_BUILD_RAZ "Build RaZ alongside Atmos (requires downloading the submodule)" OFF)
+
+if (NOT ATMOS_BUILD_RAZ)
+    set(RAZ_ROOT "C:/RaZ" CACHE PATH "Path to the RaZ installation")
+
+    set(RAZ_LIB_DIR "${RAZ_ROOT}/lib")
+
+    # Visual Studio having all the configurations from within the project, CMAKE_BUILD_TYPE is unknown at generation time
+    # Adding a link directory automatically creates anoter path to which is appended the $(Configuration) macro, which contains the build type
+    if (NOT ATMOS_COMPILER_MSVC)
+        set(RAZ_LIB_DIR "${RAZ_LIB_DIR}/${CMAKE_BUILD_TYPE}")
+    endif ()
+
+    target_link_directories(Atmos PRIVATE "${RAZ_LIB_DIR}")
+    target_include_directories(Atmos PUBLIC "${RAZ_ROOT}/include")
+    target_compile_definitions(Atmos PRIVATE RAZ_USE_WINDOW) # Raz::Window is needed
+
+    # Additional linking flags
+    if (ATMOS_PLATFORM_WINDOWS)
+        set(
+            ATMOS_LINKER_FLAGS
+
+            ${ATMOS_LINKER_FLAGS}
+            opengl32
+        )
+    elseif (ATMOS_PLATFORM_LINUX)
+        set(
+            ATMOS_LINKER_FLAGS
+
+            ${ATMOS_LINKER_FLAGS}
+            dl
+            pthread
+            GL
+            X11
+            Xrandr
+            Xcursor
+            Xinerama
+            Xxf86vm
+        )
+    elseif (ATMOS_PLATFORM_MAC)
+        find_package(OpenGL REQUIRED)
+
+        set(
+            ATMOS_LINKER_FLAGS
+
+            ${ATMOS_LINKER_FLAGS}
+            OpenGL::GL
+            "-framework OpenGL"
+            "-framework Cocoa"
+            "-framework IOKit"
+            "-framework CoreVideo"
+        )
+    endif ()
+else ()
+    set(RAZ_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/extern/RaZ")
+
+    if (EXISTS "${RAZ_ROOT}")
+        # No need to keep the examples, unit tests & documentation generation
+        set(RAZ_BUILD_EXAMPLES OFF)
+        set(RAZ_BUILD_TESTS OFF)
+        set(RAZ_GEN_DOC OFF)
+
+        add_subdirectory("${RAZ_ROOT}")
+    else ()
+        message(FATAL_ERROR "Failed to find RaZ; the submodule must be downloaded")
+    endif ()
+endif ()
+
+target_compile_definitions(Atmos PRIVATE RAZ_ROOT="${RAZ_ROOT}/")
+target_link_libraries(Atmos PUBLIC RaZ)
+
 #################
 # Atmos - Build #
 #################
