@@ -21,6 +21,10 @@ uniform Buffers uniSceneBuffers;
 uniform vec3 uniEarthCenter = vec3(0.0);
 uniform float uniEarthRadius;
 uniform float uniAtmosphereRadius;
+uniform vec3 uniSunDir;
+uniform int uniScatterPointCount;
+uniform int uniOpticalDepthSampleCount;
+uniform float uniDensityFalloff;
 
 layout(location = 0) out vec4 fragColor;
 
@@ -65,6 +69,51 @@ RaySphereInfo computeRaySphereIntersection(vec3 sphereCenter, float sphereRadius
   return RaySphereInfo(MAX_FLOAT, 0);
 }
 
+float computeLocalDensity(vec3 samplePoint) {
+  float height       = length(samplePoint - uniEarthCenter) - uniEarthRadius;
+  float height01     = height / uniAtmosphereRadius;
+  float localDensity = exp(-height01 * uniDensityFalloff) * (1 - height01);
+
+  return localDensity;
+}
+
+float computeOpticalDepth(vec3 rayOrigin, vec3 rayDir, float rayLength) {
+  vec3 samplePoint   = rayOrigin;
+  float stepSize     = rayLength / (uniOpticalDepthSampleCount - 1);
+  float opticalDepth = 0;
+
+  for (int i = 0; i < uniOpticalDepthSampleCount; ++i) {
+    float localDensity = computeLocalDensity(samplePoint);
+
+    opticalDepth += localDensity * stepSize;
+    samplePoint  += rayDir * stepSize;
+  }
+
+  return opticalDepth;
+}
+
+float computeScatteredLight(vec3 rayOrigin, vec3 rayDir, float rayLength) {
+  vec3 scatterPoint      = rayOrigin;
+  float stepSize         = rayLength / (uniScatterPointCount - 1);
+  float atmosphereExtent = uniEarthRadius + uniAtmosphereRadius;
+  float scatteredLight   = 0;
+
+  for (int i = 0; i < uniScatterPointCount; ++i) {
+    float sunRayLength = computeRaySphereIntersection(uniEarthCenter, atmosphereExtent, scatterPoint, uniSunDir).distThroughSphere;
+
+    float sunOpticalDepth  = computeOpticalDepth(scatterPoint, uniSunDir, sunRayLength);
+    float viewOpticalDepth = computeOpticalDepth(scatterPoint, -rayDir, stepSize * i);
+    float transmittance    = exp(-(sunOpticalDepth + viewOpticalDepth));
+
+    float localDensity = computeLocalDensity(scatterPoint);
+
+    scatteredLight += localDensity * transmittance * stepSize;
+    scatterPoint   += rayDir * stepSize;
+  }
+
+  return scatteredLight;
+}
+
 void main() {
   float depth = texture(uniSceneBuffers.depth, fragTexcoords).r;
 
@@ -79,5 +128,15 @@ void main() {
   float linearDepth = viewPos.z;
   float distThroughAtmosphere = min(atmosphereIntersection.distThroughSphere, linearDepth - atmosphereIntersection.distToSphere);
 
-  fragColor = vec4(vec3(distThroughAtmosphere / (uniAtmosphereRadius * 2)), 1.0);
+  vec3 color = texture(uniSceneBuffers.color, fragTexcoords).rgb;
+
+  if (distThroughAtmosphere > 0.0) {
+    const float epsilon = 0.0001;
+    vec3 atmospherePoint = cameraPos + viewDir * (atmosphereIntersection.distToSphere + epsilon);
+    float scatteredLight = computeScatteredLight(cameraPos, viewDir, distThroughAtmosphere - epsilon * 2);
+
+    fragColor = vec4(color * (1 - scatteredLight) + scatteredLight, 1.0);
+  } else {
+    fragColor = vec4(color, 1.0);
+  }
 }

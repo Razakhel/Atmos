@@ -9,9 +9,13 @@
 using namespace std::literals;
 using namespace Raz::Literals;
 
-constexpr Raz::Vec3f earthCenter(0.f);
-constexpr float earthRadius = 10.f;
-constexpr float atmosphereRadius = 5.f;
+constexpr Raz::Vec3f earthCenter      = Raz::Vec3f(0.f);
+constexpr float earthRadius           = 10.f;
+constexpr float atmosphereRadius      = 10.f;
+constexpr Raz::Vec3f sunDir           = Raz::Vec3f(0.f, -1.f, -1.f).normalize();
+constexpr int scatterPointCount       = 10;
+constexpr int opticalDepthSampleCount = 10;
+constexpr float densityFalloff        = 10.f;
 
 int main(int argc, char* argv[]) {
   std::cout << "Program:";
@@ -76,6 +80,10 @@ int main(int argc, char* argv[]) {
   atmosphereProgram.sendUniform("uniEarthCenter", earthCenter);
   atmosphereProgram.sendUniform("uniEarthRadius", earthRadius);
   atmosphereProgram.sendUniform("uniAtmosphereRadius", atmosphereRadius);
+  atmosphereProgram.sendUniform("uniSunDir", sunDir);
+  atmosphereProgram.sendUniform("uniScatterPointCount", scatterPointCount);
+  atmosphereProgram.sendUniform("uniOpticalDepthSampleCount", opticalDepthSampleCount);
+  atmosphereProgram.sendUniform("uniDensityFalloff", densityFalloff);
 
   ///////////////////
   // Camera entity //
@@ -106,10 +114,10 @@ int main(int argc, char* argv[]) {
   /////////
 
   Raz::Entity& light = world.addEntity();
-  light.addComponent<Raz::Light>(Raz::LightType::DIRECTIONAL,             // Type
-                                 Raz::Vec3f(0.f, -1.f, -1.f).normalize(), // Direction
-                                 1.f,                                     // Energy
-                                 Raz::Vec3f(1.f));                        // Color (RGB)
+  light.addComponent<Raz::Light>(Raz::LightType::DIRECTIONAL, // Type
+                                 sunDir,                      // Direction
+                                 1.f,                         // Energy
+                                 Raz::Vec3f(1.f));            // Color (RGB)
   light.addComponent<Raz::Transform>();
 
   /////////////////////
