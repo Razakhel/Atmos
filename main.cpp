@@ -9,6 +9,10 @@
 using namespace std::literals;
 using namespace Raz::Literals;
 
+constexpr Raz::Vec3f earthCenter(0.f);
+constexpr float earthRadius = 10.f;
+constexpr float atmosphereRadius = 5.f;
+
 int main(int argc, char* argv[]) {
   std::cout << "Program:";
   for (int i = 0; i < argc; ++i)
@@ -46,6 +50,33 @@ int main(int argc, char* argv[]) {
   // Allowing to quit the application with the Escape key
   window.addKeyCallback(Raz::Keyboard::ESCAPE, [&app] (float /* deltaTime */) { app.quit(); });
 
+  /////////////////////
+  // Atmosphere pass //
+  /////////////////////
+
+  Raz::RenderGraph& renderGraph = renderSystem.getRenderGraph();
+
+  const Raz::Texture& depthBuffer  = renderGraph.addTextureBuffer(window.getWidth(), window.getHeight(), 0, Raz::ImageColorspace::DEPTH);
+  const Raz::Texture& colorBuffer  = renderGraph.addTextureBuffer(window.getWidth(), window.getHeight(), 1, Raz::ImageColorspace::RGBA);
+  const Raz::Texture& normalBuffer = renderGraph.addTextureBuffer(window.getWidth(), window.getHeight(), 2, Raz::ImageColorspace::RGB);
+
+  geometryPass.addWriteTexture(depthBuffer);
+  geometryPass.addWriteTexture(colorBuffer);
+  geometryPass.addWriteTexture(normalBuffer);
+
+  Raz::RenderPass& atmospherePass = renderGraph.addNode(Raz::FragmentShader(ATMOS_ROOT + "shaders/atmosphere.frag"s));
+  atmospherePass.addReadTexture(depthBuffer, "uniSceneBuffers.depth");
+  atmospherePass.addReadTexture(colorBuffer, "uniSceneBuffers.color");
+  atmospherePass.addReadTexture(normalBuffer, "uniSceneBuffers.normal");
+
+  geometryPass.addChildren(atmospherePass);
+
+  // Sending information needed for the atmosphere to be rendered
+  Raz::ShaderProgram& atmosphereProgram = atmospherePass.getProgram();
+  atmosphereProgram.sendUniform("uniEarthCenter", earthCenter);
+  atmosphereProgram.sendUniform("uniEarthRadius", earthRadius);
+  atmosphereProgram.sendUniform("uniAtmosphereRadius", atmosphereRadius);
+
   ///////////////////
   // Camera entity //
   ///////////////////
@@ -59,7 +90,7 @@ int main(int argc, char* argv[]) {
   ///////////
 
   Raz::Entity& mesh = world.addEntity();
-  auto& meshComp    = mesh.addComponent<Raz::Mesh>(Raz::Sphere(Raz::Vec3f(0.f), 10.f), 50, Raz::SphereMeshType::UV);
+  auto& meshComp    = mesh.addComponent<Raz::Mesh>(Raz::Sphere(earthCenter, earthRadius), 50, Raz::SphereMeshType::UV);
   mesh.addComponent<Raz::Transform>();
 
   auto earthMaterial = Raz::MaterialCookTorrance::create();
@@ -127,6 +158,16 @@ int main(int argc, char* argv[]) {
     cameraTrans.rotate(-90_deg * yMove / window.getHeight(),
                        -90_deg * xMove / window.getWidth());
   });
+
+  /////////////////////
+  // Mouse callbacks //
+  /////////////////////
+
+  window.disableCursor(); // Disabling mouse cursor to allow continuous rotations
+  window.addKeyCallback(Raz::Keyboard::LEFT_ALT,
+                        [&window] (float /* deltaTime */) { window.showCursor(); },
+                        Raz::Input::ONCE,
+                        [&window] () { window.disableCursor(); });
 
   //////////////////////////
   // Starting application //
