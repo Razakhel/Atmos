@@ -1,4 +1,6 @@
 #include <RaZ/Application.hpp>
+#include <RaZ/Math/Angle.hpp>
+#include <RaZ/Math/Quaternion.hpp>
 #include <RaZ/Math/Transform.hpp>
 #include <RaZ/Render/Light.hpp>
 #include <RaZ/Render/RenderSystem.hpp>
@@ -62,16 +64,13 @@ int main(int argc, char* argv[]) {
 
   const Raz::Texture& depthBuffer  = renderGraph.addTextureBuffer(window.getWidth(), window.getHeight(), 0, Raz::ImageColorspace::DEPTH);
   const Raz::Texture& colorBuffer  = renderGraph.addTextureBuffer(window.getWidth(), window.getHeight(), 1, Raz::ImageColorspace::RGBA);
-  const Raz::Texture& normalBuffer = renderGraph.addTextureBuffer(window.getWidth(), window.getHeight(), 2, Raz::ImageColorspace::RGB);
 
   geometryPass.addWriteTexture(depthBuffer);
   geometryPass.addWriteTexture(colorBuffer);
-  geometryPass.addWriteTexture(normalBuffer);
 
   Raz::RenderPass& atmospherePass = renderGraph.addNode(Raz::FragmentShader(ATMOS_ROOT + "shaders/atmosphere.frag"s));
   atmospherePass.addReadTexture(depthBuffer, "uniSceneBuffers.depth");
   atmospherePass.addReadTexture(colorBuffer, "uniSceneBuffers.color");
-  atmospherePass.addReadTexture(normalBuffer, "uniSceneBuffers.normal");
 
   geometryPass.addChildren(atmospherePass);
 
@@ -91,7 +90,7 @@ int main(int argc, char* argv[]) {
 
   Raz::Entity& camera = world.addEntity();
   auto& cameraComp    = camera.addComponent<Raz::Camera>(window.getWidth(), window.getHeight());
-  auto& cameraTrans   = camera.addComponent<Raz::Transform>(Raz::Vec3f(0.f, 0.f, -20.f));
+  auto& cameraTrans   = camera.addComponent<Raz::Transform>(Raz::Vec3f(0.f, 0.f, -30.f));
 
   ///////////
   // Earth //
@@ -114,10 +113,10 @@ int main(int argc, char* argv[]) {
   /////////
 
   Raz::Entity& light = world.addEntity();
-  light.addComponent<Raz::Light>(Raz::LightType::DIRECTIONAL, // Type
-                                 sunDir,                      // Direction
-                                 1.f,                         // Energy
-                                 Raz::Vec3f(1.f));            // Color (RGB)
+  auto& lightComp = light.addComponent<Raz::Light>(Raz::LightType::DIRECTIONAL, // Type
+                                                   sunDir,                      // Direction
+                                                   1.f,                         // Energy
+                                                   Raz::Vec3f(1.f));            // Color (RGB)
   light.addComponent<Raz::Transform>();
 
   /////////////////////
@@ -161,27 +160,60 @@ int main(int argc, char* argv[]) {
     cameraComp.setFieldOfView(Raz::Degreesf(std::clamp(newFov, 15.f, 90.f)));
   });
 
-  window.addMouseMoveCallback([&cameraTrans, &window] (double xMove, double yMove) {
-    // Dividing move by window size to scale between -1 and 1
-    cameraTrans.rotate(-90_deg * yMove / window.getHeight(),
-                       -90_deg * xMove / window.getWidth());
-  });
+  //window.addMouseMoveCallback([&cameraTrans, &window] (double xMove, double yMove) {
+  //  // Dividing move by window size to scale between -1 and 1
+  //  cameraTrans.rotate(-90_deg * yMove / window.getHeight(),
+  //                     -90_deg * xMove / window.getWidth());
+  //});
 
   /////////////////////
   // Mouse callbacks //
   /////////////////////
 
-  window.disableCursor(); // Disabling mouse cursor to allow continuous rotations
-  window.addKeyCallback(Raz::Keyboard::LEFT_ALT,
-                        [&window] (float /* deltaTime */) { window.showCursor(); },
-                        Raz::Input::ONCE,
-                        [&window] () { window.disableCursor(); });
+  //window.disableCursor(); // Disabling mouse cursor to allow continuous rotations
+  //window.addKeyCallback(Raz::Keyboard::LEFT_ALT,
+  //                      [&window] (float /* deltaTime */) { window.showCursor(); },
+  //                      Raz::Input::ONCE,
+  //                      [&window] () { window.disableCursor(); });
+
+  /////////////
+  // Overlay //
+  /////////////
+
+  window.enableOverlay();
+
+  window.addOverlayLabel("Atmos");
+
+  window.addOverlaySeparator();
+
+  window.addOverlaySlider("Atmosphere radius", [&atmosphereProgram] (float value) {
+    atmosphereProgram.sendUniform("uniAtmosphereRadius", value);
+  }, earthRadius, earthRadius * 2.f);
+  window.addOverlaySlider("Scatter point count", [&atmosphereProgram] (float value) {
+    atmosphereProgram.sendUniform("uniScatterPointCount", static_cast<int>(value));
+  }, 0, 20);
+  window.addOverlaySlider("Optical depth sample count", [&atmosphereProgram] (float value) {
+    atmosphereProgram.sendUniform("uniOpticalDepthSampleCount", static_cast<int>(value));
+  }, 0, 20);
+  window.addOverlaySlider("Density falloff", [&atmosphereProgram] (float value) {
+    atmosphereProgram.sendUniform("uniDensityFalloff", value);
+  }, 0.f, 10.f);
+
+  window.addOverlaySeparator();
+
+  window.addOverlayFrameTime("Frame time: %.3f ms/frame"); // Frame time's & FPS counter's texts must be formatted
+  window.addOverlayFpsCounter("FPS: %.1f");
 
   //////////////////////////
   // Starting application //
   //////////////////////////
 
-  app.run();
+  app.run([&app, &renderSystem, &lightComp, &atmosphereProgram] () {
+    const Raz::Mat3f rotation(Raz::Quaternionf(90_deg * app.getDeltaTime(), Raz::Vec3f(-1.f).normalize()).computeMatrix());
+    lightComp.setDirection((lightComp.getDirection() * rotation).normalize());
+    atmosphereProgram.sendUniform("uniSunDir", lightComp.getDirection());
+    renderSystem.updateLights();
+  });
 
   return EXIT_SUCCESS;
 }
