@@ -20,7 +20,7 @@ uniform Buffers uniSceneBuffers;
 uniform vec3 uniEarthCenter = vec3(0.0);
 uniform float uniEarthRadius;
 uniform float uniAtmosphereRadius;
-uniform vec3 uniSunDir;
+uniform vec3 uniDirToSun;
 uniform int uniScatterPointCount;
 uniform int uniOpticalDepthSampleCount;
 uniform float uniDensityFalloff;
@@ -49,7 +49,7 @@ RaySphereInfo computeRaySphereIntersection(vec3 sphereCenter, float sphereRadius
   // Here, 'a' is simply 1 since we assume rayDir to be normalized, hence its length should be equal to 1
   float b = 2 * dot(offset, rayDir);
   float c = dot(offset, offset) - sphereRadius * sphereRadius;
-  float d = b * b - 4 * 1 * c;
+  float discriminant = b * b - 4 * c;
 
   RaySphereInfo res;
 
@@ -57,13 +57,14 @@ RaySphereInfo computeRaySphereIntersection(vec3 sphereCenter, float sphereRadius
   //   - 0 if d  < 0;
   //   - 1 if d == 0
   //   - 2 if d  > 0
-  if (d > 0) {
-    float s = sqrt(d);
-    float distToSphereNear = max(0, (-b - s) / 2);
-    float distToSphereFar  = (-b + s) / 2;
+  if (discriminant > 0) {
+    float sqDiscr         = sqrt(discriminant);
+    float distToSphereFar = (-b + sqDiscr) / 2;
 
-    if (distToSphereFar >= 0)
+    if (distToSphereFar >= 0) {
+      float distToSphereNear = max(0, (-b - sqDiscr) / 2);
       return RaySphereInfo(distToSphereNear, distToSphereFar - distToSphereNear);
+    }
   }
 
   return RaySphereInfo(MAX_FLOAT, 0);
@@ -96,13 +97,14 @@ vec3 computeScatteredLight(vec3 rayOrigin, vec3 rayDir, float rayLength, vec3 or
   vec3 scatterPoint      = rayOrigin;
   float stepSize         = rayLength / (uniScatterPointCount - 1);
   float atmosphereExtent = uniEarthRadius + uniAtmosphereRadius;
+
   vec3 scatteredLight    = vec3(0.0);
   float viewOpticalDepth = 0.0;
 
   for (int i = 0; i < uniScatterPointCount; ++i) {
-    float sunRayLength = computeRaySphereIntersection(uniEarthCenter, atmosphereExtent, scatterPoint, uniSunDir).distThroughSphere;
+    float sunRayLength = computeRaySphereIntersection(uniEarthCenter, atmosphereExtent, scatterPoint, uniDirToSun).distThroughSphere;
 
-    float sunOpticalDepth = computeOpticalDepth(scatterPoint, uniSunDir, sunRayLength);
+    float sunOpticalDepth = computeOpticalDepth(scatterPoint, uniDirToSun, sunRayLength);
     viewOpticalDepth      = computeOpticalDepth(scatterPoint, -rayDir, stepSize * i);
     vec3 transmittance    = exp(-(sunOpticalDepth + viewOpticalDepth) * uniScatteringCoeffs);
 
@@ -133,9 +135,9 @@ void main() {
   vec3 color = texture(uniSceneBuffers.color, fragTexcoords).rgb;
 
   if (distThroughAtmosphere > 0.0) {
-    const float epsilon = 0.0001;
+    const float epsilon  = 0.0001;
     vec3 atmospherePoint = cameraPos + viewDir * (atmosphereIntersection.distToSphere + epsilon);
-    vec3 scatteredLight  = computeScatteredLight(cameraPos, viewDir, distThroughAtmosphere - epsilon * 2, color);
+    vec3 scatteredLight  = computeScatteredLight(atmospherePoint, viewDir, distThroughAtmosphere - epsilon * 2, color);
 
     fragColor = vec4(scatteredLight, 1.0);
   } else {
