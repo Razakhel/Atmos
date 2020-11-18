@@ -14,8 +14,8 @@ using namespace Raz::Literals;
 namespace {
 
 constexpr Raz::Vec3f earthCenter      = Raz::Vec3f(0.f);
-constexpr float earthRadius           = 10.f;
-constexpr float atmosphereRadius      = 10.f;
+constexpr float earthRadius           = 15.f;
+constexpr float atmosphereRadius      = 15.f;
 constexpr Raz::Vec3f sunDir           = Raz::Vec3f(0.f, -1.f, 1.f).normalize();
 constexpr int scatterPointCount       = 10;
 constexpr int opticalDepthSampleCount = 10;
@@ -116,7 +116,7 @@ int main(int argc, char* argv[]) {
 
   Raz::Entity& camera = world.addEntity();
   auto& cameraComp    = camera.addComponent<Raz::Camera>(window.getWidth(), window.getHeight());
-  auto& cameraTrans   = camera.addComponent<Raz::Transform>(Raz::Vec3f(0.f, 0.f, -30.f));
+  auto& cameraTrans   = camera.addComponent<Raz::Transform>(Raz::Vec3f(-17.5f, 5.f, -60.f));
 
   ///////////
   // Earth //
@@ -186,21 +186,24 @@ int main(int argc, char* argv[]) {
     cameraComp.setFieldOfView(Raz::Degreesf(std::clamp(newFov, 15.f, 90.f)));
   });
 
-  //window.addMouseMoveCallback([&cameraTrans, &window] (double xMove, double yMove) {
-  //  // Dividing move by window size to scale between -1 and 1
-  //  cameraTrans.rotate(-90_deg * yMove / window.getHeight(),
-  //                     -90_deg * xMove / window.getWidth());
-  //});
+  bool cameraLocked = true; // To allow moving the camera using the mouse
 
-  /////////////////////
-  // Mouse callbacks //
-  /////////////////////
+  window.addMouseButtonCallback(Raz::Mouse::RIGHT_CLICK, [&cameraLocked, &window] (float) {
+    cameraLocked = false;
+    window.changeCursorState(Raz::Cursor::DISABLED);
+  }, Raz::Input::ALWAYS, [&cameraLocked, &window] () {
+    cameraLocked = true;
+    window.changeCursorState(Raz::Cursor::NORMAL);
+  });
 
-  //window.disableCursor(); // Disabling mouse cursor to allow continuous rotations
-  //window.addKeyCallback(Raz::Keyboard::LEFT_ALT,
-  //                      [&window] (float /* deltaTime */) { window.showCursor(); },
-  //                      Raz::Input::ONCE,
-  //                      [&window] () { window.disableCursor(); });
+  window.addMouseMoveCallback([&cameraLocked, &cameraTrans, &window] (double xMove, double yMove) {
+    if (cameraLocked)
+      return;
+
+    // Dividing move by window size to scale between -1 and 1
+    cameraTrans.rotate(-90_deg * yMove / window.getHeight(),
+                       -90_deg * xMove / window.getWidth());
+  });
 
   /////////////
   // Overlay //
@@ -212,18 +215,26 @@ int main(int argc, char* argv[]) {
 
   window.addOverlaySeparator();
 
+  window.addOverlayLabel("Press WASD to fly the camera around, Space/V to go up/down, & Shift to move faster.");
+  window.addOverlayLabel("Hold the right mouse button to rotate the camera.");
+
+  window.addOverlaySeparator();
+
   window.addOverlaySlider("Atmosphere radius", [&atmosphereProgram] (float value) {
     atmosphereProgram.sendUniform("uniAtmosphereRadius", value);
   }, earthRadius, earthRadius * 2.f);
+
   window.addOverlaySlider("Scatter point count", [&atmosphereProgram] (float value) {
     atmosphereProgram.sendUniform("uniScatterPointCount", static_cast<int>(value));
   }, 0, 20);
   window.addOverlaySlider("Optical depth sample count", [&atmosphereProgram] (float value) {
     atmosphereProgram.sendUniform("uniOpticalDepthSampleCount", static_cast<int>(value));
   }, 0, 20);
+
   window.addOverlaySlider("Density falloff", [&atmosphereProgram] (float value) {
     atmosphereProgram.sendUniform("uniDensityFalloff", value);
   }, 0.f, 10.f);
+
   window.addOverlaySlider("Red wavelength", [&atmosphereProgram] (float value) {
     colorWavelengths.x() = value;
     atmosphereProgram.sendUniform("uniScatteringCoeffs", computeScatteringCoeffs());
@@ -236,6 +247,7 @@ int main(int argc, char* argv[]) {
     colorWavelengths.z() = value;
     atmosphereProgram.sendUniform("uniScatteringCoeffs", computeScatteringCoeffs());
   }, 400.f, 700.f);
+
   window.addOverlaySlider("Scattering strength", [&atmosphereProgram] (float value) {
     scatteringStrength = value;
     atmosphereProgram.sendUniform("uniScatteringCoeffs", computeScatteringCoeffs());
