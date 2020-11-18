@@ -2,6 +2,16 @@
 
 Implementation attempts of atmosphere simulation techniques.
 
+# Gallery
+
+![Bottom right sun](https://imgur.com/tSfIAg3.png)
+
+![Upper left sun](https://imgur.com/lPOLuEu.png)
+
+By modifying the values, special effects can be achieved:
+
+![Radioactive planet](https://imgur.com/LWYIp7i.png)
+
 # Resources
 
 - Nishita et al. (1993) - [Display of the Earth Taking into Account Atmospheric Scattering](http://nishitalab.org/user/nis/cdrom/sig93_nis.pdf)
