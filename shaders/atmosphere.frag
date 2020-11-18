@@ -24,6 +24,7 @@ uniform vec3 uniSunDir;
 uniform int uniScatterPointCount;
 uniform int uniOpticalDepthSampleCount;
 uniform float uniDensityFalloff;
+uniform vec3 uniScatteringCoeffs;
 
 layout(location = 0) out vec4 fragColor;
 
@@ -91,26 +92,28 @@ float computeOpticalDepth(vec3 rayOrigin, vec3 rayDir, float rayLength) {
   return opticalDepth;
 }
 
-float computeScatteredLight(vec3 rayOrigin, vec3 rayDir, float rayLength) {
+vec3 computeScatteredLight(vec3 rayOrigin, vec3 rayDir, float rayLength, vec3 originalColor) {
   vec3 scatterPoint      = rayOrigin;
   float stepSize         = rayLength / (uniScatterPointCount - 1);
   float atmosphereExtent = uniEarthRadius + uniAtmosphereRadius;
-  float scatteredLight   = 0;
+  vec3 scatteredLight    = vec3(0.0);
+  float viewOpticalDepth = 0.0;
 
   for (int i = 0; i < uniScatterPointCount; ++i) {
     float sunRayLength = computeRaySphereIntersection(uniEarthCenter, atmosphereExtent, scatterPoint, uniSunDir).distThroughSphere;
 
-    float sunOpticalDepth  = computeOpticalDepth(scatterPoint, uniSunDir, sunRayLength);
-    float viewOpticalDepth = computeOpticalDepth(scatterPoint, -rayDir, stepSize * i);
-    float transmittance    = exp(-(sunOpticalDepth + viewOpticalDepth));
+    float sunOpticalDepth = computeOpticalDepth(scatterPoint, uniSunDir, sunRayLength);
+    viewOpticalDepth      = computeOpticalDepth(scatterPoint, -rayDir, stepSize * i);
+    vec3 transmittance    = exp(-(sunOpticalDepth + viewOpticalDepth) * uniScatteringCoeffs);
 
     float localDensity = computeLocalDensity(scatterPoint);
 
-    scatteredLight += localDensity * transmittance * stepSize;
+    scatteredLight += localDensity * transmittance * uniScatteringCoeffs * stepSize;
     scatterPoint   += rayDir * stepSize;
   }
 
-  return scatteredLight;
+  float originalColorTransmittance = exp(-viewOpticalDepth);
+  return originalColor * originalColorTransmittance + scatteredLight;
 }
 
 void main() {
@@ -132,9 +135,9 @@ void main() {
   if (distThroughAtmosphere > 0.0) {
     const float epsilon = 0.0001;
     vec3 atmospherePoint = cameraPos + viewDir * (atmosphereIntersection.distToSphere + epsilon);
-    float scatteredLight = computeScatteredLight(cameraPos, viewDir, distThroughAtmosphere - epsilon * 2);
+    vec3 scatteredLight  = computeScatteredLight(cameraPos, viewDir, distThroughAtmosphere - epsilon * 2, color);
 
-    fragColor = vec4(color * (1 - scatteredLight) + scatteredLight, 1.0);
+    fragColor = vec4(scatteredLight, 1.0);
   } else {
     fragColor = vec4(color, 1.0);
   }
