@@ -11,34 +11,38 @@
 using namespace std::literals;
 using namespace Raz::Literals;
 
+namespace {
+
 constexpr Raz::Vec3f earthCenter      = Raz::Vec3f(0.f);
 constexpr float earthRadius           = 10.f;
 constexpr float atmosphereRadius      = 10.f;
-constexpr Raz::Vec3f sunDir           = Raz::Vec3f(0.f, -1.f, -1.f).normalize();
+constexpr Raz::Vec3f sunDir           = Raz::Vec3f(0.f, -1.f, 1.f).normalize();
 constexpr int scatterPointCount       = 10;
 constexpr int opticalDepthSampleCount = 10;
 constexpr float densityFalloff        = 10.f;
-constexpr Raz::Vec3f colorWavelengths = Raz::Vec3f(700.f, 530.f, 440.f);
-constexpr float scatteringStrength    = 1.f;
+static Raz::Vec3f colorWavelengths    = Raz::Vec3f(700.f, 530.f, 440.f);
+static float scatteringStrength       = 1.f;
 
-constexpr Raz::Vec3f computeScatteringCoeffs(float scatteringCoeff) {
+inline Raz::Vec3f computeScatteringCoeffs() {
   float redScattering = 400.f / colorWavelengths.x();
   redScattering      *= redScattering; // Squared
   redScattering      *= redScattering; // Fourth
-  redScattering      *= scatteringCoeff;
+  redScattering      *= scatteringStrength;
 
   float greenScattering = 400.f / colorWavelengths.y();
   greenScattering      *= greenScattering;
   greenScattering      *= greenScattering;
-  greenScattering      *= scatteringCoeff;
+  greenScattering      *= scatteringStrength;
 
   float blueScattering = 400.f / colorWavelengths.z();
   blueScattering      *= blueScattering;
   blueScattering      *= blueScattering;
-  blueScattering      *= scatteringCoeff;
+  blueScattering      *= scatteringStrength;
 
   return Raz::Vec3f(redScattering, greenScattering, blueScattering);
 }
+
+} // namespace
 
 int main(int argc, char* argv[]) {
   std::cout << "Program:";
@@ -100,11 +104,11 @@ int main(int argc, char* argv[]) {
   atmosphereProgram.sendUniform("uniEarthCenter", earthCenter);
   atmosphereProgram.sendUniform("uniEarthRadius", earthRadius);
   atmosphereProgram.sendUniform("uniAtmosphereRadius", atmosphereRadius);
-  atmosphereProgram.sendUniform("uniSunDir", sunDir);
+  atmosphereProgram.sendUniform("uniDirToSun", -sunDir);
   atmosphereProgram.sendUniform("uniScatterPointCount", scatterPointCount);
   atmosphereProgram.sendUniform("uniOpticalDepthSampleCount", opticalDepthSampleCount);
   atmosphereProgram.sendUniform("uniDensityFalloff", densityFalloff);
-  atmosphereProgram.sendUniform("uniScatteringCoeffs", computeScatteringCoeffs(scatteringStrength));
+  atmosphereProgram.sendUniform("uniScatteringCoeffs", computeScatteringCoeffs());
 
   ///////////////////
   // Camera entity //
@@ -119,7 +123,7 @@ int main(int argc, char* argv[]) {
   ///////////
 
   Raz::Entity& mesh = world.addEntity();
-  auto& meshComp    = mesh.addComponent<Raz::Mesh>(Raz::Sphere(earthCenter, earthRadius), 50, Raz::SphereMeshType::UV);
+  auto& meshComp    = mesh.addComponent<Raz::Mesh>(Raz::Sphere(earthCenter, earthRadius), 100, Raz::SphereMeshType::UV);
   mesh.addComponent<Raz::Transform>();
 
   auto earthMaterial = Raz::MaterialCookTorrance::create();
@@ -220,8 +224,21 @@ int main(int argc, char* argv[]) {
   window.addOverlaySlider("Density falloff", [&atmosphereProgram] (float value) {
     atmosphereProgram.sendUniform("uniDensityFalloff", value);
   }, 0.f, 10.f);
+  window.addOverlaySlider("Red wavelength", [&atmosphereProgram] (float value) {
+    colorWavelengths.x() = value;
+    atmosphereProgram.sendUniform("uniScatteringCoeffs", computeScatteringCoeffs());
+  }, 400.f, 700.f);
+  window.addOverlaySlider("Green wavelength", [&atmosphereProgram] (float value) {
+    colorWavelengths.y() = value;
+    atmosphereProgram.sendUniform("uniScatteringCoeffs", computeScatteringCoeffs());
+  }, 400.f, 700.f);
+  window.addOverlaySlider("Blue wavelength", [&atmosphereProgram] (float value) {
+    colorWavelengths.z() = value;
+    atmosphereProgram.sendUniform("uniScatteringCoeffs", computeScatteringCoeffs());
+  }, 400.f, 700.f);
   window.addOverlaySlider("Scattering strength", [&atmosphereProgram] (float value) {
-    atmosphereProgram.sendUniform("uniScatteringCoeffs", computeScatteringCoeffs(value));
+    scatteringStrength = value;
+    atmosphereProgram.sendUniform("uniScatteringCoeffs", computeScatteringCoeffs());
   }, 0.f, 10.f);
 
   window.addOverlaySeparator();
@@ -234,9 +251,9 @@ int main(int argc, char* argv[]) {
   //////////////////////////
 
   app.run([&app, &renderSystem, &lightComp, &atmosphereProgram] () {
-    const Raz::Mat3f rotation(Raz::Quaternionf(90_deg * app.getDeltaTime(), Raz::Vec3f(-1.f).normalize()).computeMatrix());
+    const Raz::Mat3f rotation(Raz::Quaternionf(45_deg * app.getDeltaTime(), Raz::Vec3f(-1.f).normalize()).computeMatrix());
     lightComp.setDirection((lightComp.getDirection() * rotation).normalize());
-    atmosphereProgram.sendUniform("uniSunDir", lightComp.getDirection());
+    atmosphereProgram.sendUniform("uniDirToSun", -lightComp.getDirection());
     renderSystem.updateLights();
   });
 
