@@ -18,6 +18,27 @@ constexpr Raz::Vec3f sunDir           = Raz::Vec3f(0.f, -1.f, -1.f).normalize();
 constexpr int scatterPointCount       = 10;
 constexpr int opticalDepthSampleCount = 10;
 constexpr float densityFalloff        = 10.f;
+constexpr Raz::Vec3f colorWavelengths = Raz::Vec3f(700.f, 530.f, 440.f);
+constexpr float scatteringStrength    = 1.f;
+
+constexpr Raz::Vec3f computeScatteringCoeffs(float scatteringCoeff) {
+  float redScattering = 400.f / colorWavelengths.x();
+  redScattering      *= redScattering; // Squared
+  redScattering      *= redScattering; // Fourth
+  redScattering      *= scatteringCoeff;
+
+  float greenScattering = 400.f / colorWavelengths.y();
+  greenScattering      *= greenScattering;
+  greenScattering      *= greenScattering;
+  greenScattering      *= scatteringCoeff;
+
+  float blueScattering = 400.f / colorWavelengths.z();
+  blueScattering      *= blueScattering;
+  blueScattering      *= blueScattering;
+  blueScattering      *= scatteringCoeff;
+
+  return Raz::Vec3f(redScattering, greenScattering, blueScattering);
+}
 
 int main(int argc, char* argv[]) {
   std::cout << "Program:";
@@ -83,6 +104,7 @@ int main(int argc, char* argv[]) {
   atmosphereProgram.sendUniform("uniScatterPointCount", scatterPointCount);
   atmosphereProgram.sendUniform("uniOpticalDepthSampleCount", opticalDepthSampleCount);
   atmosphereProgram.sendUniform("uniDensityFalloff", densityFalloff);
+  atmosphereProgram.sendUniform("uniScatteringCoeffs", computeScatteringCoeffs(scatteringStrength));
 
   ///////////////////
   // Camera entity //
@@ -197,6 +219,9 @@ int main(int argc, char* argv[]) {
   }, 0, 20);
   window.addOverlaySlider("Density falloff", [&atmosphereProgram] (float value) {
     atmosphereProgram.sendUniform("uniDensityFalloff", value);
+  }, 0.f, 10.f);
+  window.addOverlaySlider("Scattering strength", [&atmosphereProgram] (float value) {
+    atmosphereProgram.sendUniform("uniScatteringCoeffs", computeScatteringCoeffs(value));
   }, 0.f, 10.f);
 
   window.addOverlaySeparator();
