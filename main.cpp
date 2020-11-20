@@ -16,7 +16,7 @@ namespace {
 constexpr Raz::Vec3f earthCenter      = Raz::Vec3f(0.f);
 constexpr float earthRadius           = 15.f;
 constexpr float atmosphereRadius      = 15.f;
-constexpr Raz::Vec3f sunDir           = Raz::Vec3f(0.f, -1.f, 1.f).normalize();
+static const Raz::Vec3f sunDir        = Raz::Vec3f(0.f, -1.f, 1.f).normalize();
 constexpr int scatterPointCount       = 10;
 constexpr int opticalDepthSampleCount = 10;
 constexpr float densityFalloff        = 10.f;
@@ -79,7 +79,7 @@ int main(int argc, char* argv[]) {
 #endif
 
   // Allowing to quit the application with the Escape key
-  window.addKeyCallback(Raz::Keyboard::ESCAPE, [&app] (float /* deltaTime */) { app.quit(); });
+  window.addKeyCallback(Raz::Keyboard::ESCAPE, [&app] (float /* deltaTime */) noexcept { app.quit(); });
 
   /////////////////////
   // Atmosphere pass //
@@ -151,9 +151,9 @@ int main(int argc, char* argv[]) {
 
   float cameraSpeed = 1.f;
   window.addKeyCallback(Raz::Keyboard::LEFT_SHIFT,
-                        [&cameraSpeed] (float /* deltaTime */) { cameraSpeed = 2.f; },
+                        [&cameraSpeed] (float /* deltaTime */) noexcept { cameraSpeed = 2.f; },
                         Raz::Input::ONCE,
-                        [&cameraSpeed] () { cameraSpeed = 1.f; });
+                        [&cameraSpeed] () noexcept { cameraSpeed = 1.f; });
   window.addKeyCallback(Raz::Keyboard::SPACE, [&cameraTrans, &cameraSpeed] (float deltaTime) {
     cameraTrans.move(0.f, (10.f * deltaTime) * cameraSpeed, 0.f);
   });
@@ -222,36 +222,36 @@ int main(int argc, char* argv[]) {
 
   window.addOverlaySlider("Atmosphere radius", [&atmosphereProgram] (float value) {
     atmosphereProgram.sendUniform("uniAtmosphereRadius", value);
-  }, earthRadius, earthRadius * 2.f);
+  }, earthRadius, earthRadius * 2.f, earthRadius);
 
   window.addOverlaySlider("Scatter point count", [&atmosphereProgram] (float value) {
     atmosphereProgram.sendUniform("uniScatterPointCount", static_cast<int>(value));
-  }, 0, 20);
+  }, 0, 20, scatterPointCount);
   window.addOverlaySlider("Optical depth sample count", [&atmosphereProgram] (float value) {
     atmosphereProgram.sendUniform("uniOpticalDepthSampleCount", static_cast<int>(value));
-  }, 0, 20);
+  }, 0, 20, opticalDepthSampleCount);
 
   window.addOverlaySlider("Density falloff", [&atmosphereProgram] (float value) {
     atmosphereProgram.sendUniform("uniDensityFalloff", value);
-  }, 0.f, 10.f);
+  }, 0.f, 10.f, densityFalloff);
 
   window.addOverlaySlider("Red wavelength", [&atmosphereProgram] (float value) {
     colorWavelengths.x() = value;
     atmosphereProgram.sendUniform("uniScatteringCoeffs", computeScatteringCoeffs());
-  }, 400.f, 700.f);
+  }, 400.f, 700.f, colorWavelengths.x());
   window.addOverlaySlider("Green wavelength", [&atmosphereProgram] (float value) {
     colorWavelengths.y() = value;
     atmosphereProgram.sendUniform("uniScatteringCoeffs", computeScatteringCoeffs());
-  }, 400.f, 700.f);
+  }, 400.f, 700.f, colorWavelengths.y());
   window.addOverlaySlider("Blue wavelength", [&atmosphereProgram] (float value) {
     colorWavelengths.z() = value;
     atmosphereProgram.sendUniform("uniScatteringCoeffs", computeScatteringCoeffs());
-  }, 400.f, 700.f);
+  }, 400.f, 700.f, colorWavelengths.z());
 
   window.addOverlaySlider("Scattering strength", [&atmosphereProgram] (float value) {
     scatteringStrength = value;
     atmosphereProgram.sendUniform("uniScatteringCoeffs", computeScatteringCoeffs());
-  }, 0.f, 10.f);
+  }, 0.f, 10.f, scatteringStrength);
 
   window.addOverlaySeparator();
 
