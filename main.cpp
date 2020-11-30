@@ -220,6 +220,11 @@ int main(int argc, char* argv[]) {
 
   window.addOverlaySeparator();
 
+  bool rotateSun = true;
+  window.addOverlayCheckbox("Enable sun rotation", [&rotateSun] () { rotateSun = true; }, [&rotateSun] () { rotateSun = false; }, true);
+
+  window.addOverlaySeparator();
+
   window.addOverlaySlider("Atmosphere radius", [&atmosphereProgram] (float value) {
     atmosphereProgram.sendUniform("uniAtmosphereRadius", value);
   }, earthRadius, earthRadius * 2.f, earthRadius);
@@ -262,7 +267,10 @@ int main(int argc, char* argv[]) {
   // Starting application //
   //////////////////////////
 
-  app.run([&app, &renderSystem, &lightComp, &atmosphereProgram] () {
+  app.run([&rotateSun, &app, &renderSystem, &lightComp, &atmosphereProgram] () {
+    if (!rotateSun)
+      return;
+
     const Raz::Mat3f rotation(Raz::Quaternionf(45_deg * app.getDeltaTime(), Raz::Vec3f(-1.f).normalize()).computeMatrix());
     lightComp.setDirection((lightComp.getDirection() * rotation).normalize());
     atmosphereProgram.sendUniform("uniDirToSun", -lightComp.getDirection());
