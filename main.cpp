@@ -6,8 +6,6 @@
 #include <RaZ/Render/RenderSystem.hpp>
 #include <RaZ/Render/Texture.hpp>
 
-#include <iostream>
-
 using namespace std::literals;
 using namespace Raz::Literals;
 
@@ -44,12 +42,7 @@ inline Raz::Vec3f computeScatteringCoeffs() {
 
 } // namespace
 
-int main(int argc, char* argv[]) {
-  std::cout << "Program:";
-  for (int i = 0; i < argc; ++i)
-    std::cout << ' ' << argv[i];
-  std::cout << std::endl;
-
+int main() {
   ////////////////////
   // Initialization //
   ////////////////////
@@ -61,7 +54,7 @@ int main(int argc, char* argv[]) {
   // Rendering //
   ///////////////
 
-  auto& renderSystem = world.addSystem<Raz::RenderSystem>(1280, 720, "Atmos", 2);
+  auto& renderSystem = world.addSystem<Raz::RenderSystem>(1280u, 720u, "Atmos", Raz::WindowSetting::DEFAULT, 2);
 
   Raz::RenderPass& geometryPass = renderSystem.getGeometryPass();
   geometryPass.getProgram().setShaders(Raz::VertexShader(RAZ_ROOT + "shaders/common.vert"s),
@@ -126,13 +119,8 @@ int main(int argc, char* argv[]) {
   auto& meshComp    = mesh.addComponent<Raz::Mesh>(Raz::Sphere(earthCenter, earthRadius), 100, Raz::SphereMeshType::UV);
   mesh.addComponent<Raz::Transform>();
 
-  auto earthMaterial = Raz::MaterialCookTorrance::create();
-  earthMaterial->setAlbedoMap(Raz::Texture::create(ATMOS_ROOT + "assets/textures/earth.png"s, 0));
-  earthMaterial->setNormalMap(Raz::Texture::create(ATMOS_ROOT + "assets/textures/earth_normal.png"s, 1));
-  earthMaterial->setMetallicMap(Raz::Texture::create(Raz::ColorPreset::BLACK, 2));
-  earthMaterial->setRoughnessMap(Raz::Texture::create(Raz::ColorPreset::WHITE, 3));
-  earthMaterial->setAmbientOcclusionMap(Raz::Texture::create(Raz::ColorPreset::WHITE, 4));
-  meshComp.setMaterial(std::move(earthMaterial));
+  static_cast<Raz::MaterialCookTorrance&>(*meshComp.getMaterials()[0]).setAlbedoMap(Raz::Texture::create(ATMOS_ROOT + "assets/textures/earth.png"s, 0));
+  static_cast<Raz::MaterialCookTorrance&>(*meshComp.getMaterials()[0]).setNormalMap(Raz::Texture::create(ATMOS_ROOT + "assets/textures/earth_normal.png"s, 1));
 
   /////////
   // Sun //
@@ -221,7 +209,7 @@ int main(int argc, char* argv[]) {
   window.addOverlaySeparator();
 
   bool rotateSun = true;
-  window.addOverlayCheckbox("Enable sun rotation", [&rotateSun] () { rotateSun = true; }, [&rotateSun] () { rotateSun = false; }, true);
+  window.addOverlayCheckbox("Enable sun rotation", [&rotateSun] () noexcept { rotateSun = true; }, [&rotateSun] () noexcept { rotateSun = false; }, true);
 
   window.addOverlaySeparator();
 

@@ -494,9 +494,9 @@ else ()
 
     if (EXISTS "${RAZ_ROOT}")
         # No need to keep the examples, unit tests & documentation generation
-        set(RAZ_BUILD_EXAMPLES OFF)
-        set(RAZ_BUILD_TESTS OFF)
-        set(RAZ_GEN_DOC OFF)
+        set(RAZ_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+        set(RAZ_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+        set(RAZ_GEN_DOC OFF CACHE BOOL "" FORCE)
 
         add_subdirectory("${RAZ_ROOT}")
     else ()
