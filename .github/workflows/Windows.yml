@@ -1,0 +1,60 @@
+name: Atmos - Windows
+
+on: [push, pull_request]
+
+jobs:
+  windows:
+    name: Windows (${{ matrix.compiler.c }}, ${{ matrix.build_type }})
+    runs-on: windows-2016
+
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler:
+          - { c: cl, cpp: cl }
+        build_type:
+          - Debug
+          - Release
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Pulling RaZ
+      run: git submodule update --init --recursive
+
+      # Installing OpenAL-soft to handle the audio part
+    - name: Build setup
+      run: |
+        curl --silent --insecure https://www.openal-soft.org/openal-binaries/openal-soft-1.21.0-bin.zip -O &&
+        7z x openal-soft-1.21.0-bin.zip &&
+        mv openal-soft-1.21.0-bin C:/OpenAL;
+        cmake -E make_directory ${{ runner.workspace }}/build-${{ matrix.compiler.c }}
+
+    - name: Configuration
+      shell: bash
+      working-directory: ${{ runner.workspace }}/build-${{ matrix.compiler.c }}
+      run: |
+        cmake -G "Visual Studio 15 2017" -A x64 -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DATMOS_BUILD_RAZ=ON $GITHUB_WORKSPACE
+
+    - name: Build
+      shell: bash
+      working-directory: ${{ runner.workspace }}/build-${{ matrix.compiler.c }}
+      run: |
+        cmake --build . --config ${{ matrix.build_type }} &&
+        pwd && find .
+
+    # The include/ & lib/ folders are removed after installation; these are RaZ's install results
+    # A workaround must be found to tell CMake not to install them from Atmos
+    - name: Install
+      working-directory: ${{ runner.workspace }}/build-${{ matrix.compiler.c }}
+      run: |
+        cmake --install . --prefix C:/Atmos --config ${{ matrix.build_type }} &&
+        rm C:/Atmos/include -r &&
+        rm C:/Atmos/lib -r
+
+    - name: Upload build
+      uses: actions/upload-artifact@v2
+      with:
+        name: Atmos-windows-${{ matrix.compiler.c }}-${{ matrix.build_type }}-${{ github.run_id }}
+        path: |
+          C:/Atmos

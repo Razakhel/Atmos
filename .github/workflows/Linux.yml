@@ -1,0 +1,77 @@
+name: Atmos - Linux
+
+on: [push, pull_request]
+
+jobs:
+  linux:
+    name: Linux (${{ matrix.compiler.c }}, ${{ matrix.build_type }})
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler:
+          - { c: gcc, cpp: g++ }
+          - { c: clang, cpp: clang++ }
+        build_type:
+          - Debug
+          - Release
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Pulling RaZ
+      run: git submodule update --init --recursive
+
+    # Updating the packages list (needed at the moment for libinput to be found), & installing the needed packages for RaZ:
+    #   - GLEW & X11 as graphical dependencies
+    #   - OpenAL-soft to handle the audio part
+    - name: Packages installation
+      run: |
+        sudo apt update &&
+        sudo apt install -y --no-install-recommends \
+          libglew-dev libxi-dev libxcursor-dev libxrandr-dev libxinerama-dev libxxf86vm-dev \
+          libopenal-dev
+
+    - name: Build setup
+      run: |
+        cmake -E make_directory ${{ runner.workspace }}/build-${{ matrix.compiler.c }}
+
+    - name: Configuration
+      shell: bash
+      working-directory: ${{ runner.workspace }}/build-${{ matrix.compiler.c }}
+      run: |
+        cmake -G "Unix Makefiles" -DCMAKE_C_COMPILER=${{ matrix.compiler.c }} -DCMAKE_CXX_COMPILER=${{ matrix.compiler.cpp }} \
+                                  -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DATMOS_BUILD_RAZ=ON \
+                                  $GITHUB_WORKSPACE
+
+    - name: Build
+      shell: bash
+      working-directory: ${{ runner.workspace }}/build-${{ matrix.compiler.c }}
+      run: |
+        cmake --build . --config ${{ matrix.build_type }} &&
+        pwd && find .
+
+    # Installing Atmos in the build directory; default is /usr/local
+    - name: Install
+      working-directory: ${{ runner.workspace }}/build-${{ matrix.compiler.c }}
+      run: |
+        sudo cmake --install . --prefix ./ --config ${{ matrix.build_type }}
+
+    # Making an archive to maintain file permissions & avoiding weird paths
+    # Additional dependencies are libc & libm (located in /usr/lib*), as well as libgcc_s & libstdc++ (which would require another package)
+    - name: Packaging build
+      run: |
+        mkdir Atmos-linux-${{ matrix.compiler.c }}-${{ matrix.build_type }}-${{ github.run_id }}/ &&
+        cp -t Atmos-linux-${{ matrix.compiler.c }}-${{ matrix.build_type }}-${{ github.run_id }}/ \
+          ${{ runner.workspace }}/build-${{ matrix.compiler.c }}/Atmos \
+          /usr/lib/*/libGL.so \
+          /usr/lib/*/libopenal.so
+        tar -cvf Atmos-linux-${{ matrix.compiler.c }}-${{ matrix.build_type }}-${{ github.run_id }}.tar \
+          Atmos-linux-${{ matrix.compiler.c }}-${{ matrix.build_type }}-${{ github.run_id }}/
+
+    - name: Upload build
+      uses: actions/upload-artifact@v2
+      with:
+        name: Atmos-linux-${{ matrix.compiler.c }}-${{ matrix.build_type }}-${{ github.run_id }}
+        path: Atmos-linux-${{ matrix.compiler.c }}-${{ matrix.build_type }}-${{ github.run_id }}.tar

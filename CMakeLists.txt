@@ -442,3 +442,14 @@ endif ()
 
 # Compiling Atmos' sources
 target_sources(Atmos PRIVATE ${ATMOS_FILES})
+
+########################
+# Atmos - Installation #
+########################
+
+# Installing the executable
+if (ATMOS_PLATFORM_WINDOWS)
+    set(CMAKE_INSTALL_PREFIX "C:/Atmos")
+endif ()
+
+install(TARGETS Atmos DESTINATION "${CMAKE_INSTALL_PREFIX}")
