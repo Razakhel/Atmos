@@ -24,55 +24,41 @@ target_compile_features(Atmos PRIVATE cxx_std_17)
 # Detect whether Emscripten is being used
 if (CMAKE_CXX_COMPILER MATCHES "/em\\+\\+.*$")
     set(ATMOS_USE_EMSCRIPTEN ON)
-    set(CMAKE_AR "${CMAKE_C_COMPILER}")
-    set(CMAKE_STATIC_LIBRARY_SUFFIX ".bc")
-    set(CMAKE_C_CREATE_STATIC_LIBRARY "<CMAKE_AR> -o <TARGET> <LINK_FLAGS> <OBJECTS>")
-    set(CMAKE_CXX_CREATE_STATIC_LIBRARY "<CMAKE_AR> -o <TARGET> <LINK_FLAGS> <OBJECTS>")
 else ()
     set(ATMOS_USE_EMSCRIPTEN OFF)
 endif ()
 
 if (MSVC AND NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang") # Finding exclusively MSVC, not clang-cl
-    set(ATMOS_COMPILER "MSVC")
     set(ATMOS_COMPILER_MSVC ON)
     target_compile_definitions(Atmos PUBLIC ATMOS_COMPILER_MSVC)
 elseif (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     if (MSVC)
         # Using clang-cl, for which both MSVC & Clang are found
-        set(ATMOS_COMPILER "Clang-cl")
         set(ATMOS_COMPILER_CLANG_CL ON)
-    else ()
-        set(ATMOS_COMPILER "Clang")
     endif ()
 
     set(ATMOS_COMPILER_CLANG ON)
     target_compile_definitions(Atmos PUBLIC ATMOS_COMPILER_CLANG)
 elseif (CMAKE_CXX_COMPILER_ID MATCHES "GNU")
-    set(ATMOS_COMPILER "GCC")
     set(ATMOS_COMPILER_GCC ON)
     target_compile_definitions(Atmos PUBLIC ATMOS_COMPILER_GCC)
 endif ()
 
 if (WIN32 OR CYGWIN)
-    set(ATMOS_PLATFORM "Windows")
     set(ATMOS_PLATFORM_WINDOWS ON)
     target_compile_definitions(Atmos PUBLIC ATMOS_PLATFORM_WINDOWS)
 
     if (CYGWIN)
-        set(ATMOS_PLATFORM "${ATMOS_PLATFORM} (Cygwin)")
         set(ATMOS_PLATFORM_CYGWIN ON)
         target_compile_definitions(Atmos PUBLIC ATMOS_PLATFORM_CYGWIN)
     endif ()
 elseif (APPLE)
-    set(ATMOS_PLATFORM "macOS")
     set(ATMOS_PLATFORM_MAC ON)
     target_compile_definitions(Atmos PUBLIC ATMOS_PLATFORM_MAC)
 elseif (ATMOS_USE_EMSCRIPTEN)
-    set(ATMOS_PLATFORM "Emscripten")
     set(ATMOS_PLATFORM_EMSCRIPTEN ON)
     target_compile_definitions(Atmos PUBLIC ATMOS_PLATFORM_EMSCRIPTEN USE_OPENGL_ES)
 elseif (UNIX)
-    set(ATMOS_PLATFORM "Linux")
     set(ATMOS_PLATFORM_LINUX ON)
     target_compile_definitions(Atmos PUBLIC ATMOS_PLATFORM_LINUX)
 endif ()
@@ -80,72 +66,20 @@ endif ()
 if (ATMOS_COMPILER_MSVC)
     set(ATMOS_CONFIG_DEBUG   "$<IF:$<CONFIG:Debug>,ON,OFF>")
     set(ATMOS_CONFIG_RELEASE "$<IF:$<CONFIG:Debug>,OFF,ON>")
-    set(ATMOS_CONFIG_SHORT   "$<IF:$<CONFIG:Debug>,Debug,Release>")
 
     target_compile_definitions(Atmos PUBLIC $<IF:$<CONFIG:Debug>,ATMOS_CONFIG_DEBUG,ATMOS_CONFIG_RELEASE>)
-
-    set(CONFIG_STR_UPPER $<UPPER_CASE:$<CONFIG>>)
 else ()
     if (CMAKE_BUILD_TYPE STREQUAL "Debug")
         set(ATMOS_CONFIG_DEBUG   ON)
         set(ATMOS_CONFIG_RELEASE OFF)
-        set(ATMOS_CONFIG_SHORT   "Debug")
 
         target_compile_definitions(Atmos PUBLIC ATMOS_CONFIG_DEBUG)
     else ()
         set(ATMOS_CONFIG_DEBUG   OFF)
         set(ATMOS_CONFIG_RELEASE ON)
-        set(ATMOS_CONFIG_SHORT   "Release")
 
         target_compile_definitions(Atmos PUBLIC ATMOS_CONFIG_RELEASE)
     endif ()
-
-    string(TOUPPER ${CMAKE_BUILD_TYPE} CONFIG_STR_UPPER)
-endif ()
-
-set(ATMOS_BUILD_FLAGS "${CMAKE_CXX_FLAGS_${CONFIG_STR_UPPER}}")
-
-option(ENABLE_DEBUG_INFO "Creates a debug target which prints useful values" OFF)
-
-if (ENABLE_DEBUG_INFO)
-    cmake_host_system_information(RESULT PLATFORM_RELEASE QUERY OS_RELEASE)
-    cmake_host_system_information(RESULT PLATFORM_VERSION QUERY OS_VERSION)
-
-    # Trimming potential leading & trailing space characters (happens for Windows' values)
-    string(STRIP ${PLATFORM_RELEASE} PLATFORM_RELEASE)
-    string(STRIP ${PLATFORM_VERSION} PLATFORM_VERSION)
-
-    add_custom_target(
-        Atmos_PrintDebugInfo
-
-        ${CMAKE_COMMAND} -E echo "" &&
-        ${CMAKE_COMMAND} -E echo "######################" &&
-        ${CMAKE_COMMAND} -E echo "# [Atmos] Debug info #" &&
-        ${CMAKE_COMMAND} -E echo "######################" &&
-        ${CMAKE_COMMAND} -E echo "" &&
-
-        ${CMAKE_COMMAND} -E echo "--- Platform (found ${ATMOS_PLATFORM})" &&
-        ${CMAKE_COMMAND} -E echo "  Name:     ${CMAKE_SYSTEM_NAME}" &&
-        ${CMAKE_COMMAND} -E echo "  Release:  ${PLATFORM_RELEASE}" &&
-        ${CMAKE_COMMAND} -E echo "  Version:  ${PLATFORM_VERSION}" &&
-        ${CMAKE_COMMAND} -E echo "" &&
-
-        ${CMAKE_COMMAND} -E echo "--- Compiler (found ${ATMOS_COMPILER})" &&
-        ${CMAKE_COMMAND} -E echo "  ID:       ${CMAKE_CXX_COMPILER_ID}" &&
-        ${CMAKE_COMMAND} -E echo "  Version:  ${CMAKE_CXX_COMPILER_VERSION}" &&
-        ${CMAKE_COMMAND} -E echo "  Path:     ${CMAKE_CXX_COMPILER}" &&
-        ${CMAKE_COMMAND} -E echo "" &&
-
-        ${CMAKE_COMMAND} -E echo "--- Configuration" &&
-        ${CMAKE_COMMAND} -E echo "  Name:                 $<CONFIG>" &&
-        ${CMAKE_COMMAND} -E echo "  ATMOS_CONFIG_DEBUG:   ${ATMOS_CONFIG_DEBUG}" &&
-        ${CMAKE_COMMAND} -E echo "  ATMOS_CONFIG_RELEASE: ${ATMOS_CONFIG_RELEASE}" &&
-        ${CMAKE_COMMAND} -E echo "  ATMOS_CONFIG_SHORT:   ${ATMOS_CONFIG_SHORT}" &&
-        ${CMAKE_COMMAND} -E echo "" &&
-
-        ${CMAKE_COMMAND} -E echo "--- Build flags: '${ATMOS_BUILD_FLAGS}'" &&
-        ${CMAKE_COMMAND} -E echo ""
-    )
 endif ()
 
 if (ATMOS_USE_EMSCRIPTEN)
@@ -310,29 +244,6 @@ elseif (ATMOS_COMPILER_CLANG)
         )
     endif ()
 
-    if (ATMOS_USE_EMSCRIPTEN)
-        set(
-            ATMOS_COMPILER_FLAGS
-
-            ${ATMOS_COMPILER_FLAGS}
-            "SHELL:-s USE_GLFW=3"
-            "SHELL:-s USE_LIBPNG=1"
-        )
-
-        set(
-            ATMOS_LINKER_FLAGS
-
-            ${ATMOS_LINKER_FLAGS}
-            "-s USE_LIBPNG=1"
-            "-s USE_GLFW=3"
-            "-s USE_WEBGL2=1"
-            "-s OFFSCREEN_FRAMEBUFFER=1"
-            "-s OFFSCREENCANVAS_SUPPORT=1"
-            "-s DOUBLE_MODE=0"
-            glfw
-        )
-    endif ()
-
     # Disabling some warnings available since Clang 5
     if (CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 5)
         set(
@@ -347,24 +258,11 @@ elseif (ATMOS_COMPILER_MSVC)
         ATMOS_COMPILER_FLAGS
 
         /Wall
+        /MP # Enabling multi-processes compilation
 
         /wd4061 # Enum value in a switch not explicitly handled by a case label
         /wd4571 # SEH exceptions aren't caught since Visual C++ 7.1
         /wd5045 # Spectre mitigation
-
-        # Warnings triggered by the FBX SDK
-        /wd4266 # No override available (function is hidden)
-        /wd4619 # Unknown warning number
-        /wd4625 # Copy constructor implicitly deleted
-        /wd4626 # Copy assignment operator implicitly deleted
-
-        # Warnings triggered by Catch
-        /wd4365 # Signed/unsigned mismatch (implicit conversion)
-        /wd4388 # Signed/unsigned mismatch (equality comparison)
-        /wd4583 # Destructor not implicitly called
-        /wd4623 # Default constructor implicitly deleted
-        /wd4868 # Evaluation order not guaranteed in braced initializing list
-        /wd5204 # Class with virtual functions but no virtual destructor
 
         # Warnings triggered by MSVC's standard library
         /wd4355 # 'this' used in base member initializing list
@@ -407,6 +305,21 @@ if (ATMOS_COMPILER_MSVC OR ATMOS_COMPILER_CLANG_CL)
         NOMINMAX # Preventing definitions of min & max macros
         _SILENCE_CXX17_CODECVT_HEADER_DEPRECATION_WARNING # Ignoring std::codecvt deprecation warnings
     )
+endif ()
+
+if (ATMOS_USE_EMSCRIPTEN)
+    target_compile_options(Atmos PRIVATE "SHELL:-s USE_LIBPNG=1")
+
+    target_link_options(
+        Atmos
+
+        PUBLIC
+
+        "SHELL:-s USE_GLFW=3"
+        "SHELL:-s USE_LIBPNG=1"
+    )
+
+    target_link_libraries(Atmos PRIVATE glfw)
 endif ()
 
 ########################

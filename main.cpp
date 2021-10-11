@@ -1,10 +1,13 @@
 #include <RaZ/Application.hpp>
+#include <RaZ/Data/Mesh.hpp>
 #include <RaZ/Math/Angle.hpp>
 #include <RaZ/Math/Quaternion.hpp>
 #include <RaZ/Math/Transform.hpp>
 #include <RaZ/Render/Light.hpp>
+#include <RaZ/Render/MeshRenderer.hpp>
 #include <RaZ/Render/RenderSystem.hpp>
 #include <RaZ/Render/Texture.hpp>
+#include <RaZ/Utils/Logger.hpp>
 
 using namespace std::literals;
 using namespace Raz::Literals;
@@ -14,12 +17,12 @@ namespace {
 constexpr Raz::Vec3f earthCenter      = Raz::Vec3f(0.f);
 constexpr float earthRadius           = 15.f;
 constexpr float atmosphereRadius      = 15.f;
-static const Raz::Vec3f sunDir        = Raz::Vec3f(0.f, -1.f, 1.f).normalize();
+const Raz::Vec3f sunDir               = Raz::Vec3f(0.f, -1.f, 1.f).normalize();
 constexpr int scatterPointCount       = 10;
 constexpr int opticalDepthSampleCount = 10;
 constexpr float densityFalloff        = 10.f;
-static Raz::Vec3f colorWavelengths    = Raz::Vec3f(700.f, 530.f, 440.f);
-static float scatteringStrength       = 1.f;
+Raz::Vec3f colorWavelengths           = Raz::Vec3f(700.f, 530.f, 440.f);
+float scatteringStrength              = 1.f;
 
 inline Raz::Vec3f computeScatteringCoeffs() {
   float redScattering = 400.f / colorWavelengths.x();
@@ -49,6 +52,8 @@ int main() {
 
   Raz::Application app;
   Raz::World& world = app.addWorld(3);
+
+  Raz::Logger::setLoggingLevel(Raz::LoggingLevel::ALL);
 
   ///////////////
   // Rendering //
@@ -115,12 +120,15 @@ int main() {
   // Earth //
   ///////////
 
-  Raz::Entity& mesh = world.addEntity();
-  auto& meshComp    = mesh.addComponent<Raz::Mesh>(Raz::Sphere(earthCenter, earthRadius), 100, Raz::SphereMeshType::UV);
-  mesh.addComponent<Raz::Transform>();
+  Raz::Entity& earth = world.addEntity();
+  earth.addComponent<Raz::Transform>();
+  auto& mesh         = earth.addComponent<Raz::Mesh>(Raz::Sphere(earthCenter, earthRadius), 100, Raz::SphereMeshType::UV);
+  auto& meshRenderer = earth.addComponent<Raz::MeshRenderer>(mesh);
 
-  static_cast<Raz::MaterialCookTorrance&>(*meshComp.getMaterials()[0]).setAlbedoMap(Raz::Texture::create(ATMOS_ROOT + "assets/textures/earth.png"s, 0));
-  static_cast<Raz::MaterialCookTorrance&>(*meshComp.getMaterials()[0]).setNormalMap(Raz::Texture::create(ATMOS_ROOT + "assets/textures/earth_normal.png"s, 1));
+  auto material = Raz::MaterialCookTorrance::create(Raz::Vec3f(1.f), 0.f, 0.f);
+  material->setAlbedoMap(Raz::Texture::create(ATMOS_ROOT + "assets/textures/earth.png"s, 0));
+  material->setNormalMap(Raz::Texture::create(ATMOS_ROOT + "assets/textures/earth_normal.png"s, 1));
+  meshRenderer.setMaterial(std::move(material));
 
   /////////
   // Sun //
@@ -197,59 +205,57 @@ int main() {
   // Overlay //
   /////////////
 
-  window.enableOverlay();
+  Raz::OverlayWindow& overlayWindow = window.addOverlayWindow("Atmos");
 
-  window.addOverlayLabel("Atmos");
+  overlayWindow.addLabel("Press WASD to fly the camera around,");
+  overlayWindow.addLabel("Space/V to go up/down,");
+  overlayWindow.addLabel("& Shift to move faster.");
+  overlayWindow.addLabel("Hold the right mouse button to rotate the camera.");
 
-  window.addOverlaySeparator();
-
-  window.addOverlayLabel("Press WASD to fly the camera around, Space/V to go up/down, & Shift to move faster.");
-  window.addOverlayLabel("Hold the right mouse button to rotate the camera.");
-
-  window.addOverlaySeparator();
+  overlayWindow.addSeparator();
 
   bool rotateSun = true;
-  window.addOverlayCheckbox("Enable sun rotation", [&rotateSun] () noexcept { rotateSun = true; }, [&rotateSun] () noexcept { rotateSun = false; }, true);
+  overlayWindow.addCheckbox("Enable sun rotation", [&rotateSun] () noexcept { rotateSun = true; }, [&rotateSun] () noexcept { rotateSun = false; }, true);
 
-  window.addOverlaySeparator();
+  overlayWindow.addSeparator();
 
-  window.addOverlaySlider("Atmosphere radius", [&atmosphereProgram] (float value) {
+  overlayWindow.addSlider("Atmosphere radius", [&atmosphereProgram] (float value) {
     atmosphereProgram.sendUniform("uniAtmosphereRadius", value);
   }, earthRadius, earthRadius * 2.f, earthRadius);
 
-  window.addOverlaySlider("Scatter point count", [&atmosphereProgram] (float value) {
+  overlayWindow.addSlider("Scatter point count", [&atmosphereProgram] (float value) {
     atmosphereProgram.sendUniform("uniScatterPointCount", static_cast<int>(value));
   }, 0, 20, scatterPointCount);
-  window.addOverlaySlider("Optical depth sample count", [&atmosphereProgram] (float value) {
+  overlayWindow.addSlider("Optical depth sample count", [&atmosphereProgram] (float value) {
     atmosphereProgram.sendUniform("uniOpticalDepthSampleCount", static_cast<int>(value));
   }, 0, 20, opticalDepthSampleCount);
 
-  window.addOverlaySlider("Density falloff", [&atmosphereProgram] (float value) {
+  overlayWindow.addSlider("Density falloff", [&atmosphereProgram] (float value) {
     atmosphereProgram.sendUniform("uniDensityFalloff", value);
   }, 0.f, 10.f, densityFalloff);
 
-  window.addOverlaySlider("Red wavelength", [&atmosphereProgram] (float value) {
+  overlayWindow.addSlider("Red wavelength", [&atmosphereProgram] (float value) {
     colorWavelengths.x() = value;
     atmosphereProgram.sendUniform("uniScatteringCoeffs", computeScatteringCoeffs());
   }, 400.f, 700.f, colorWavelengths.x());
-  window.addOverlaySlider("Green wavelength", [&atmosphereProgram] (float value) {
+  overlayWindow.addSlider("Green wavelength", [&atmosphereProgram] (float value) {
     colorWavelengths.y() = value;
     atmosphereProgram.sendUniform("uniScatteringCoeffs", computeScatteringCoeffs());
   }, 400.f, 700.f, colorWavelengths.y());
-  window.addOverlaySlider("Blue wavelength", [&atmosphereProgram] (float value) {
+  overlayWindow.addSlider("Blue wavelength", [&atmosphereProgram] (float value) {
     colorWavelengths.z() = value;
     atmosphereProgram.sendUniform("uniScatteringCoeffs", computeScatteringCoeffs());
   }, 400.f, 700.f, colorWavelengths.z());
 
-  window.addOverlaySlider("Scattering strength", [&atmosphereProgram] (float value) {
+  overlayWindow.addSlider("Scattering strength", [&atmosphereProgram] (float value) {
     scatteringStrength = value;
     atmosphereProgram.sendUniform("uniScatteringCoeffs", computeScatteringCoeffs());
   }, 0.f, 10.f, scatteringStrength);
 
-  window.addOverlaySeparator();
+  overlayWindow.addSeparator();
 
-  window.addOverlayFrameTime("Frame time: %.3f ms/frame"); // Frame time's & FPS counter's texts must be formatted
-  window.addOverlayFpsCounter("FPS: %.1f");
+  overlayWindow.addFrameTime("Frame time: %.3f ms/frame"); // Frame time's & FPS counter's texts must be formatted
+  overlayWindow.addFpsCounter("FPS: %.1f");
 
   //////////////////////////
   // Starting application //
