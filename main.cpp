@@ -65,16 +65,11 @@ int main() {
   geometryPass.getProgram().setShaders(Raz::VertexShader(RAZ_ROOT + "shaders/common.vert"s),
                                        Raz::FragmentShader(RAZ_ROOT + "shaders/cook-torrance.frag"s));
 
-  Raz::Window& window = renderSystem.getWindow();
+  renderSystem.setCubemap(Raz::Cubemap(ATMOS_ROOT + "assets/skyboxes/space_right.png"s, ATMOS_ROOT + "assets/skyboxes/space_left.png"s,
+                                       ATMOS_ROOT + "assets/skyboxes/space_up.png"s,    ATMOS_ROOT + "assets/skyboxes/space_down.png"s,
+                                       ATMOS_ROOT + "assets/skyboxes/space_front.png"s, ATMOS_ROOT + "assets/skyboxes/space_back.png"s));
 
-#if !defined(USE_OPENGL_ES)
-  // Allow wireframe toggling
-  bool isWireframe = false;
-  window.addKeyCallback(Raz::Keyboard::Z, [&isWireframe] (float /* deltaTime */) {
-    isWireframe = !isWireframe;
-    Raz::Renderer::setPolygonMode(Raz::FaceOrientation::FRONT_BACK, (isWireframe ? Raz::PolygonMode::LINE : Raz::PolygonMode::FILL));
-  }, Raz::Input::ONCE);
-#endif
+  Raz::Window& window = renderSystem.getWindow();
 
   // Allowing to quit the application with the Escape key
   window.addKeyCallback(Raz::Keyboard::ESCAPE, [&app] (float /* deltaTime */) noexcept { app.quit(); });
