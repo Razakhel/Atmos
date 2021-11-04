@@ -412,17 +412,56 @@ else ()
         set(RAZ_GEN_DOC OFF CACHE BOOL "" FORCE)
 
         add_subdirectory("${RAZ_ROOT}")
+
+        # Use RaZ's compiler flags' script
+        include("${RAZ_ROOT}/cmake/CompilerFlags.cmake")
+        add_compiler_flags(Atmos PRIVATE)
     else ()
         message(FATAL_ERROR "Failed to find RaZ; the submodule must be downloaded")
     endif ()
 endif ()
 
-target_compile_definitions(Atmos PRIVATE RAZ_ROOT="${RAZ_ROOT}/")
+if (ATMOS_USE_EMSCRIPTEN)
+    target_compile_definitions(Atmos PRIVATE RAZ_ROOT="/")
+else ()
+    target_compile_definitions(Atmos PRIVATE RAZ_ROOT="${RAZ_ROOT}/")
+endif ()
 target_link_libraries(Atmos PUBLIC RaZ)
 
 #################
 # Atmos - Build #
 #################
+
+if (ATMOS_USE_EMSCRIPTEN)
+    set_target_properties(Atmos PROPERTIES SUFFIX ".html")
+
+    target_link_options(
+        Atmos
+
+        PRIVATE
+
+        "SHELL:--preload-file ${CMAKE_CURRENT_SOURCE_DIR}/shaders/opengles3@shaders"
+        "SHELL:--preload-file ${RAZ_ROOT}/shaders/opengles3@shaders"
+    )
+
+    set(
+        ATMOS_ASSETS
+
+        assets/textures/earth.png
+        assets/textures/earth_normal.png
+
+        assets/skyboxes/space_right.png
+        assets/skyboxes/space_left.png
+        assets/skyboxes/space_up.png
+        assets/skyboxes/space_down.png
+        assets/skyboxes/space_back.png
+        assets/skyboxes/space_front.png
+    )
+
+    foreach (ASSET_PATH ${ATMOS_ASSETS})
+        target_link_options(Atmos PRIVATE "SHELL:--preload-file ${CMAKE_SOURCE_DIR}/${ASSET_PATH}@${ASSET_PATH}")
+    endforeach ()
+endif ()
 
 target_include_directories(Atmos PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
 

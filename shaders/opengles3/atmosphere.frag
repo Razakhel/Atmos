@@ -1,4 +1,7 @@
-#version 330 core
+#version 300 es
+
+precision highp float;
+precision highp int;
 
 struct Buffers {
   sampler2D depth;
