@@ -440,8 +440,8 @@ if (ATMOS_USE_EMSCRIPTEN)
 
         PRIVATE
 
-        "SHELL:--preload-file ${CMAKE_CURRENT_SOURCE_DIR}/shaders/opengles3@shaders"
-        "SHELL:--preload-file ${RAZ_ROOT}/shaders/opengles3@shaders"
+        "SHELL:--preload-file ${CMAKE_CURRENT_SOURCE_DIR}/shaders@shaders"
+        "SHELL:--preload-file ${RAZ_ROOT}/shaders@shaders"
     )
 
     set(

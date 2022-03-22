@@ -1,5 +1,3 @@
-#version 330 core
-
 struct Buffers {
   sampler2D depth;
   sampler2D color;
@@ -129,7 +127,7 @@ void main() {
   float atmosphereExtent = uniEarthRadius + uniAtmosphereRadius;
   RaySphereInfo atmosphereIntersection = computeRaySphereIntersection(uniEarthCenter, atmosphereExtent, cameraPos, viewDir);
 
-  float linearDepth = viewPos.z;
+  float linearDepth = -viewPos.z;
   float distThroughAtmosphere = min(atmosphereIntersection.distThroughSphere, linearDepth - atmosphereIntersection.distToSphere);
 
   vec3 color = texture(uniSceneBuffers.color, fragTexcoords).rgb;

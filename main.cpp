@@ -1,4 +1,5 @@
 #include <RaZ/Application.hpp>
+#include <RaZ/Data/ImageFormat.hpp>
 #include <RaZ/Data/Mesh.hpp>
 #include <RaZ/Math/Angle.hpp>
 #include <RaZ/Math/Quaternion.hpp>
@@ -9,7 +10,6 @@
 #include <RaZ/Render/Texture.hpp>
 #include <RaZ/Utils/Logger.hpp>
 
-using namespace std::literals;
 using namespace Raz::Literals;
 
 namespace {
@@ -17,7 +17,7 @@ namespace {
 constexpr Raz::Vec3f earthCenter      = Raz::Vec3f(0.f);
 constexpr float earthRadius           = 15.f;
 constexpr float atmosphereRadius      = 15.f;
-const Raz::Vec3f sunDir               = Raz::Vec3f(0.f, -1.f, 1.f).normalize();
+const Raz::Vec3f sunDir               = Raz::Vec3f(0.f, -1.f, -1.f).normalize();
 constexpr int scatterPointCount       = 10;
 constexpr int opticalDepthSampleCount = 10;
 constexpr float densityFalloff        = 10.f;
@@ -61,14 +61,9 @@ int main() {
     ///////////////
 
     auto& renderSystem = world.addSystem<Raz::RenderSystem>(1280u, 720u, "Atmos", Raz::WindowSetting::DEFAULT, 2);
-
-    Raz::RenderPass& geometryPass = renderSystem.getGeometryPass();
-    geometryPass.getProgram().setShaders(Raz::VertexShader(RAZ_ROOT + "shaders/common.vert"s),
-                                         Raz::FragmentShader(RAZ_ROOT + "shaders/cook-torrance.frag"s));
-
-    renderSystem.setCubemap(Raz::Cubemap(ATMOS_ROOT + "assets/skyboxes/space_right.png"s, ATMOS_ROOT + "assets/skyboxes/space_left.png"s,
-                                         ATMOS_ROOT + "assets/skyboxes/space_up.png"s,    ATMOS_ROOT + "assets/skyboxes/space_down.png"s,
-                                         ATMOS_ROOT + "assets/skyboxes/space_front.png"s, ATMOS_ROOT + "assets/skyboxes/space_back.png"s));
+    renderSystem.setCubemap(Raz::Cubemap(ATMOS_ROOT "assets/skyboxes/space_right.png", ATMOS_ROOT "assets/skyboxes/space_left.png",
+                                         ATMOS_ROOT "assets/skyboxes/space_up.png",    ATMOS_ROOT "assets/skyboxes/space_down.png",
+                                         ATMOS_ROOT "assets/skyboxes/space_front.png", ATMOS_ROOT "assets/skyboxes/space_back.png"));
 
     Raz::Window& window = renderSystem.getWindow();
 
@@ -80,14 +75,15 @@ int main() {
     /////////////////////
 
     Raz::RenderGraph& renderGraph = renderSystem.getRenderGraph();
+    Raz::RenderPass& geometryPass = renderSystem.getGeometryPass();
 
-    const Raz::Texture& depthBuffer  = renderGraph.addTextureBuffer(window.getWidth(), window.getHeight(), Raz::ImageColorspace::DEPTH);
-    const Raz::Texture& colorBuffer  = renderGraph.addTextureBuffer(window.getWidth(), window.getHeight(), Raz::ImageColorspace::RGBA);
+    const auto depthBuffer = Raz::Texture::create(window.getWidth(), window.getHeight(), Raz::ImageColorspace::DEPTH);
+    const auto colorBuffer = Raz::Texture::create(window.getWidth(), window.getHeight(), Raz::ImageColorspace::RGBA);
 
     geometryPass.addWriteTexture(depthBuffer);
     geometryPass.addWriteTexture(colorBuffer);
 
-    Raz::RenderPass& atmospherePass = renderGraph.addNode(Raz::FragmentShader(ATMOS_ROOT + "shaders/atmosphere.frag"s));
+    Raz::RenderPass& atmospherePass = renderGraph.addNode(Raz::FragmentShader(ATMOS_ROOT "shaders/atmosphere.frag"));
     atmospherePass.addReadTexture(depthBuffer, "uniSceneBuffers.depth");
     atmospherePass.addReadTexture(colorBuffer, "uniSceneBuffers.color");
 
@@ -95,6 +91,7 @@ int main() {
 
     // Sending information needed for the atmosphere to be rendered
     Raz::ShaderProgram& atmosphereProgram = atmospherePass.getProgram();
+    atmosphereProgram.use();
     atmosphereProgram.sendUniform("uniEarthCenter", earthCenter);
     atmosphereProgram.sendUniform("uniEarthRadius", earthRadius);
     atmosphereProgram.sendUniform("uniAtmosphereRadius", atmosphereRadius);
@@ -110,21 +107,20 @@ int main() {
 
     Raz::Entity& camera = world.addEntity();
     auto& cameraComp    = camera.addComponent<Raz::Camera>(window.getWidth(), window.getHeight());
-    auto& cameraTrans   = camera.addComponent<Raz::Transform>(Raz::Vec3f(-17.5f, 5.f, -60.f));
+    auto& cameraTrans   = camera.addComponent<Raz::Transform>(Raz::Vec3f(-17.5f, 5.f, 60.f));
 
     ///////////
     // Earth //
     ///////////
 
-    Raz::Entity& earth = world.addEntity();
-    earth.addComponent<Raz::Transform>();
-    auto& mesh         = earth.addComponent<Raz::Mesh>(Raz::Sphere(earthCenter, earthRadius), 100, Raz::SphereMeshType::UV);
-    auto& meshRenderer = earth.addComponent<Raz::MeshRenderer>(mesh);
+    Raz::Entity& earth = world.addEntityWithComponent<Raz::Transform>();
+    auto& meshRenderer = earth.addComponent<Raz::MeshRenderer>(Raz::Mesh(Raz::Sphere(earthCenter, earthRadius), 100, Raz::SphereMeshType::UV));
 
-    auto material = Raz::MaterialCookTorrance::create(Raz::Vec3f(1.f), 0.f, 0.f);
-    material->setAlbedoMap(Raz::Texture::create(ATMOS_ROOT + "assets/textures/earth.png"s, 0));
-    material->setNormalMap(Raz::Texture::create(ATMOS_ROOT + "assets/textures/earth_normal.png"s, 1));
-    meshRenderer.setMaterial(std::move(material));
+    Raz::Material& material = meshRenderer.getMaterials().front();
+    material.setAttribute(0.f, "uniMaterial.metallicFactor");
+    material.setAttribute(0.f, "uniMaterial.roughnessFactor");
+    material.setTexture(Raz::Texture::create(Raz::ImageFormat::load(ATMOS_ROOT "assets/textures/earth.png")), "uniMaterial.baseColorMap");
+    material.setTexture(Raz::Texture::create(Raz::ImageFormat::load(ATMOS_ROOT "assets/textures/earth_normal.png")), "uniMaterial.normalMap");
 
     /////////
     // Sun //
@@ -153,18 +149,18 @@ int main() {
       cameraTrans.move(0.f, (-10.f * deltaTime) * cameraSpeed, 0.f);
     });
     window.addKeyCallback(Raz::Keyboard::W, [&cameraTrans, &cameraComp, &cameraSpeed] (float deltaTime) {
-      const float moveVal = (10.f * deltaTime) * cameraSpeed;
-
-      cameraTrans.move(0.f, 0.f, moveVal);
-      cameraComp.setOrthoBoundX(cameraComp.getOrthoBoundX() - moveVal);
-      cameraComp.setOrthoBoundY(cameraComp.getOrthoBoundY() - moveVal);
-    });
-    window.addKeyCallback(Raz::Keyboard::S, [&cameraTrans, &cameraComp, &cameraSpeed] (float deltaTime) {
       const float moveVal = (-10.f * deltaTime) * cameraSpeed;
 
       cameraTrans.move(0.f, 0.f, moveVal);
-      cameraComp.setOrthoBoundX(cameraComp.getOrthoBoundX() - moveVal);
-      cameraComp.setOrthoBoundY(cameraComp.getOrthoBoundY() - moveVal);
+      cameraComp.setOrthoBoundX(cameraComp.getOrthoBoundX() + moveVal);
+      cameraComp.setOrthoBoundY(cameraComp.getOrthoBoundY() + moveVal);
+    });
+    window.addKeyCallback(Raz::Keyboard::S, [&cameraTrans, &cameraComp, &cameraSpeed] (float deltaTime) {
+      const float moveVal = (10.f * deltaTime) * cameraSpeed;
+
+      cameraTrans.move(0.f, 0.f, moveVal);
+      cameraComp.setOrthoBoundX(cameraComp.getOrthoBoundX() + moveVal);
+      cameraComp.setOrthoBoundY(cameraComp.getOrthoBoundY() + moveVal);
     });
     window.addKeyCallback(Raz::Keyboard::A, [&cameraTrans, &cameraSpeed] (float deltaTime) {
       cameraTrans.move((-10.f * deltaTime) * cameraSpeed, 0.f, 0.f);
@@ -173,7 +169,7 @@ int main() {
       cameraTrans.move((10.f * deltaTime) * cameraSpeed, 0.f, 0.f);
     });
 
-    window.addMouseScrollCallback([&cameraComp] (double /* xOffset */, double yOffset) {
+    window.setMouseScrollCallback([&cameraComp] (double /* xOffset */, double yOffset) {
       const float newFov = Raz::Degreesf(cameraComp.getFieldOfView()).value + static_cast<float>(-yOffset) * 2.f;
       cameraComp.setFieldOfView(Raz::Degreesf(std::clamp(newFov, 15.f, 90.f)));
     });
@@ -182,13 +178,13 @@ int main() {
 
     window.addMouseButtonCallback(Raz::Mouse::RIGHT_CLICK, [&cameraLocked, &window] (float) {
       cameraLocked = false;
-      window.changeCursorState(Raz::Cursor::DISABLED);
+      window.setCursorState(Raz::Cursor::DISABLED);
     }, Raz::Input::ONCE, [&cameraLocked, &window] () {
       cameraLocked = true;
-      window.changeCursorState(Raz::Cursor::NORMAL);
+      window.setCursorState(Raz::Cursor::NORMAL);
     });
 
-    window.addMouseMoveCallback([&cameraLocked, &cameraTrans, &window] (double xMove, double yMove) {
+    window.setMouseMoveCallback([&cameraLocked, &cameraTrans, &window] (double xMove, double yMove) {
       if (cameraLocked)
         return;
 
@@ -201,57 +197,60 @@ int main() {
     // Overlay //
     /////////////
 
-    Raz::OverlayWindow& overlayWindow = window.addOverlayWindow("Atmos");
+    Raz::OverlayWindow& overlay = window.getOverlay().addWindow("Atmos", Raz::Vec2f(-1.f));
 
-    overlayWindow.addLabel("Press WASD to fly the camera around,");
-    overlayWindow.addLabel("Space/V to go up/down,");
-    overlayWindow.addLabel("& Shift to move faster.");
-    overlayWindow.addLabel("Hold the right mouse button to rotate the camera.");
+    overlay.addLabel("Press WASD to fly the camera around,");
+    overlay.addLabel("Space/V to go up/down,");
+    overlay.addLabel("& Shift to move faster.");
+    overlay.addLabel("Hold the right mouse button to rotate the camera.");
 
-    overlayWindow.addSeparator();
+    overlay.addSeparator();
 
     bool rotateSun = true;
-    overlayWindow.addCheckbox("Enable sun rotation", [&rotateSun] () noexcept { rotateSun = true; }, [&rotateSun] () noexcept { rotateSun = false; }, true);
+    overlay.addCheckbox("Enable sun rotation",
+                        [&rotateSun] () noexcept { rotateSun = true; },
+                        [&rotateSun] () noexcept { rotateSun = false; },
+                        true);
 
-    overlayWindow.addSeparator();
+    overlay.addSeparator();
 
-    overlayWindow.addSlider("Atmosphere radius", [&atmosphereProgram] (float value) {
+    overlay.addSlider("Atmosphere radius", [&atmosphereProgram] (float value) {
       atmosphereProgram.sendUniform("uniAtmosphereRadius", value);
     }, earthRadius, earthRadius * 2.f, earthRadius);
 
-    overlayWindow.addSlider("Scatter point count", [&atmosphereProgram] (float value) {
+    overlay.addSlider("Scatter point count", [&atmosphereProgram] (float value) {
       atmosphereProgram.sendUniform("uniScatterPointCount", static_cast<int>(value));
     }, 0, 20, scatterPointCount);
-    overlayWindow.addSlider("Optical depth sample count", [&atmosphereProgram] (float value) {
+    overlay.addSlider("Optical depth sample count", [&atmosphereProgram] (float value) {
       atmosphereProgram.sendUniform("uniOpticalDepthSampleCount", static_cast<int>(value));
     }, 0, 20, opticalDepthSampleCount);
 
-    overlayWindow.addSlider("Density falloff", [&atmosphereProgram] (float value) {
+    overlay.addSlider("Density falloff", [&atmosphereProgram] (float value) {
       atmosphereProgram.sendUniform("uniDensityFalloff", value);
     }, 0.f, 10.f, densityFalloff);
 
-    overlayWindow.addSlider("Red wavelength", [&atmosphereProgram] (float value) {
+    overlay.addSlider("Red wavelength", [&atmosphereProgram] (float value) {
       colorWavelengths.x() = value;
       atmosphereProgram.sendUniform("uniScatteringCoeffs", computeScatteringCoeffs());
     }, 400.f, 700.f, colorWavelengths.x());
-    overlayWindow.addSlider("Green wavelength", [&atmosphereProgram] (float value) {
+    overlay.addSlider("Green wavelength", [&atmosphereProgram] (float value) {
       colorWavelengths.y() = value;
       atmosphereProgram.sendUniform("uniScatteringCoeffs", computeScatteringCoeffs());
     }, 400.f, 700.f, colorWavelengths.y());
-    overlayWindow.addSlider("Blue wavelength", [&atmosphereProgram] (float value) {
+    overlay.addSlider("Blue wavelength", [&atmosphereProgram] (float value) {
       colorWavelengths.z() = value;
       atmosphereProgram.sendUniform("uniScatteringCoeffs", computeScatteringCoeffs());
     }, 400.f, 700.f, colorWavelengths.z());
 
-    overlayWindow.addSlider("Scattering strength", [&atmosphereProgram] (float value) {
+    overlay.addSlider("Scattering strength", [&atmosphereProgram] (float value) {
       scatteringStrength = value;
       atmosphereProgram.sendUniform("uniScatteringCoeffs", computeScatteringCoeffs());
     }, 0.f, 10.f, scatteringStrength);
 
-    overlayWindow.addSeparator();
+    overlay.addSeparator();
 
-    overlayWindow.addFrameTime("Frame time: %.3f ms/frame"); // Frame time's & FPS counter's texts must be formatted
-    overlayWindow.addFpsCounter("FPS: %.1f");
+    overlay.addFrameTime("Frame time: %.3f ms/frame"); // Frame time's & FPS counter's texts must be formatted
+    overlay.addFpsCounter("FPS: %.1f");
 
     //////////////////////////
     // Starting application //
@@ -261,7 +260,7 @@ int main() {
       if (!rotateSun)
         return;
 
-      const Raz::Mat3f rotation(Raz::Quaternionf(45_deg * app.getDeltaTime(), Raz::Vec3f(-1.f).normalize()).computeMatrix());
+      const Raz::Quaternionf rotation(-45_deg * app.getDeltaTime(), Raz::Vec3f(-1.f, -1.f, 1.f).normalize());
       lightComp.setDirection((lightComp.getDirection() * rotation).normalize());
       atmosphereProgram.sendUniform("uniDirToSun", -lightComp.getDirection());
       renderSystem.updateLights();
