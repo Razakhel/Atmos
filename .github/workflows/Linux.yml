@@ -18,7 +18,7 @@ jobs:
           - Release
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
 
     - name: Pulling RaZ
       run: git submodule update --init --recursive
@@ -71,7 +71,7 @@ jobs:
           Atmos-linux-${{ matrix.compiler.c }}-${{ matrix.build_type }}-${{ github.run_id }}/
 
     - name: Upload build
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v3
       with:
         name: Atmos-linux-${{ matrix.compiler.c }}-${{ matrix.build_type }}-${{ github.run_id }}
         path: Atmos-linux-${{ matrix.compiler.c }}-${{ matrix.build_type }}-${{ github.run_id }}.tar

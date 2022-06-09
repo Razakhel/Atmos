@@ -1,9 +1,11 @@
 #include <RaZ/Application.hpp>
+#include <RaZ/Data/Image.hpp>
 #include <RaZ/Data/ImageFormat.hpp>
 #include <RaZ/Data/Mesh.hpp>
 #include <RaZ/Math/Angle.hpp>
 #include <RaZ/Math/Quaternion.hpp>
 #include <RaZ/Math/Transform.hpp>
+#include <RaZ/Render/Camera.hpp>
 #include <RaZ/Render/Light.hpp>
 #include <RaZ/Render/MeshRenderer.hpp>
 #include <RaZ/Render/RenderSystem.hpp>
@@ -61,9 +63,12 @@ int main() {
     ///////////////
 
     auto& renderSystem = world.addSystem<Raz::RenderSystem>(1280u, 720u, "Atmos", Raz::WindowSetting::DEFAULT, 2);
-    renderSystem.setCubemap(Raz::Cubemap(ATMOS_ROOT "assets/skyboxes/space_right.png", ATMOS_ROOT "assets/skyboxes/space_left.png",
-                                         ATMOS_ROOT "assets/skyboxes/space_up.png",    ATMOS_ROOT "assets/skyboxes/space_down.png",
-                                         ATMOS_ROOT "assets/skyboxes/space_front.png", ATMOS_ROOT "assets/skyboxes/space_back.png"));
+    renderSystem.setCubemap(Raz::Cubemap(Raz::ImageFormat::load(ATMOS_ROOT "assets/skyboxes/space_right.png"),
+                                         Raz::ImageFormat::load(ATMOS_ROOT "assets/skyboxes/space_left.png"),
+                                         Raz::ImageFormat::load(ATMOS_ROOT "assets/skyboxes/space_up.png"),
+                                         Raz::ImageFormat::load(ATMOS_ROOT "assets/skyboxes/space_down.png"),
+                                         Raz::ImageFormat::load(ATMOS_ROOT "assets/skyboxes/space_front.png"),
+                                         Raz::ImageFormat::load(ATMOS_ROOT "assets/skyboxes/space_back.png")));
 
     Raz::Window& window = renderSystem.getWindow();
 
@@ -77,11 +82,11 @@ int main() {
     Raz::RenderGraph& renderGraph = renderSystem.getRenderGraph();
     Raz::RenderPass& geometryPass = renderSystem.getGeometryPass();
 
-    const auto depthBuffer = Raz::Texture::create(window.getWidth(), window.getHeight(), Raz::ImageColorspace::DEPTH);
-    const auto colorBuffer = Raz::Texture::create(window.getWidth(), window.getHeight(), Raz::ImageColorspace::RGBA);
+    const auto depthBuffer = Raz::Texture2D::create(window.getWidth(), window.getHeight(), Raz::TextureColorspace::DEPTH);
+    const auto colorBuffer = Raz::Texture2D::create(window.getWidth(), window.getHeight(), Raz::TextureColorspace::RGBA);
 
-    geometryPass.addWriteTexture(depthBuffer);
-    geometryPass.addWriteTexture(colorBuffer);
+    geometryPass.setWriteDepthTexture(depthBuffer);
+    geometryPass.addWriteColorTexture(colorBuffer, 0);
 
     Raz::RenderPass& atmospherePass = renderGraph.addNode(Raz::FragmentShader(ATMOS_ROOT "shaders/atmosphere.frag"));
     atmospherePass.addReadTexture(depthBuffer, "uniSceneBuffers.depth");
@@ -116,11 +121,11 @@ int main() {
     Raz::Entity& earth = world.addEntityWithComponent<Raz::Transform>();
     auto& meshRenderer = earth.addComponent<Raz::MeshRenderer>(Raz::Mesh(Raz::Sphere(earthCenter, earthRadius), 100, Raz::SphereMeshType::UV));
 
-    Raz::Material& material = meshRenderer.getMaterials().front();
-    material.setAttribute(0.f, "uniMaterial.metallicFactor");
-    material.setAttribute(0.f, "uniMaterial.roughnessFactor");
-    material.setTexture(Raz::Texture::create(Raz::ImageFormat::load(ATMOS_ROOT "assets/textures/earth.png")), "uniMaterial.baseColorMap");
-    material.setTexture(Raz::Texture::create(Raz::ImageFormat::load(ATMOS_ROOT "assets/textures/earth_normal.png")), "uniMaterial.normalMap");
+    Raz::RenderShaderProgram& materialProgram = meshRenderer.getMaterials().front().getProgram();
+    materialProgram.setAttribute(0.f, "uniMaterial.metallicFactor");
+    materialProgram.setAttribute(0.f, "uniMaterial.roughnessFactor");
+    materialProgram.setTexture(Raz::Texture2D::create(Raz::ImageFormat::load(ATMOS_ROOT "assets/textures/earth.png")), "uniMaterial.baseColorMap");
+    materialProgram.setTexture(Raz::Texture2D::create(Raz::ImageFormat::load(ATMOS_ROOT "assets/textures/earth_normal.png")), "uniMaterial.normalMap");
 
     /////////
     // Sun //
@@ -130,7 +135,7 @@ int main() {
     auto& lightComp = light.addComponent<Raz::Light>(Raz::LightType::DIRECTIONAL, // Type
                                                      sunDir,                      // Direction
                                                      1.f,                         // Energy
-                                                     Raz::Vec3f(1.f));            // Color (RGB)
+                                                     Raz::ColorPreset::White);    // Color (RGB)
     light.addComponent<Raz::Transform>();
 
     /////////////////////
@@ -152,15 +157,13 @@ int main() {
       const float moveVal = (-10.f * deltaTime) * cameraSpeed;
 
       cameraTrans.move(0.f, 0.f, moveVal);
-      cameraComp.setOrthoBoundX(cameraComp.getOrthoBoundX() + moveVal);
-      cameraComp.setOrthoBoundY(cameraComp.getOrthoBoundY() + moveVal);
+      cameraComp.setOrthographicBound(cameraComp.getOrthographicBound() + moveVal);
     });
     window.addKeyCallback(Raz::Keyboard::S, [&cameraTrans, &cameraComp, &cameraSpeed] (float deltaTime) {
       const float moveVal = (10.f * deltaTime) * cameraSpeed;
 
       cameraTrans.move(0.f, 0.f, moveVal);
-      cameraComp.setOrthoBoundX(cameraComp.getOrthoBoundX() + moveVal);
-      cameraComp.setOrthoBoundY(cameraComp.getOrthoBoundY() + moveVal);
+      cameraComp.setOrthographicBound(cameraComp.getOrthographicBound() + moveVal);
     });
     window.addKeyCallback(Raz::Keyboard::A, [&cameraTrans, &cameraSpeed] (float deltaTime) {
       cameraTrans.move((-10.f * deltaTime) * cameraSpeed, 0.f, 0.f);
@@ -256,11 +259,11 @@ int main() {
     // Starting application //
     //////////////////////////
 
-    app.run([&rotateSun, &app, &renderSystem, &lightComp, &atmosphereProgram] () {
+    app.run([&rotateSun, &renderSystem, &lightComp, &atmosphereProgram] (float deltaTime) {
       if (!rotateSun)
         return;
 
-      const Raz::Quaternionf rotation(-45_deg * app.getDeltaTime(), Raz::Vec3f(-1.f, -1.f, 1.f).normalize());
+      const Raz::Quaternionf rotation(-45_deg * deltaTime, Raz::Vec3f(-1.f, -1.f, 1.f).normalize());
       lightComp.setDirection((lightComp.getDirection() * rotation).normalize());
       atmosphereProgram.sendUniform("uniDirToSun", -lightComp.getDirection());
       renderSystem.updateLights();
